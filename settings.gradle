@@ -1,0 +1,5 @@
+rootProject.name = 'jimgui'
+
+include 'jimgui-native'
+include 'jimgui-binding'
+include 'jimgui-core'

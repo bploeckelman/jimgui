@@ -1,0 +1,27 @@
+// jimgui-core — idiomatic Java API and LibGDX integration.
+// This is what application developers depend on.
+
+plugins {
+    id 'java-library'
+}
+
+group = 'net.bplo.libs'
+version = '0.1.0-SNAPSHOT'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    api project(':jimgui-binding')
+    // LibGDX is provided by the consuming application — compileOnly keeps it
+    // out of the published POM so apps don't get a duplicate dependency.
+    compileOnly 'com.badlogicgames.gdx:gdx:1.14.0'
+    compileOnly 'com.badlogicgames.gdx:gdx-backend-lwjgl3:1.14.0'
+}

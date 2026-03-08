@@ -1,0 +1,183 @@
+// jimgui-binding — jextract-generated FFM bindings.
+//
+// WORKFLOW (run these manually, then commit the output):
+//   ./gradlew downloadJextract        — one-time setup: gets jextract binary
+//   ./gradlew generateBindings        — (re-)generates FFM binding sources
+//   git add jimgui-binding/src/main/java && git commit -m "regen bindings"
+//
+// The generated sources are committed to source control so builds work
+// without jextract installed. Do NOT run generateBindings in CI or as
+// part of the normal build.
+
+plugins {
+    id 'java-library'
+}
+
+group   = 'net.bplo.libs'
+version = '0.1.0-SNAPSHOT'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    api project(':jimgui-native')
+}
+
+// ---------------------------------------------------------------------------
+// Shared paths
+// ---------------------------------------------------------------------------
+
+ext {
+    headersDir       = file("${rootDir}/imgui-headers")
+    bindingPackage   = 'net.bplo.libs.jimgui.binding'
+    bindingOutputDir = file("${projectDir}/src/main/java")
+}
+
+// ---------------------------------------------------------------------------
+// downloadCimguiHeaders
+// ---------------------------------------------------------------------------
+
+tasks.register('downloadCimguiHeaders') {
+    group       = 'codegen'
+    description = 'Downloads cimgui.h and cimgui_impl.h into imgui-headers/. ' +
+                  'Skips automatically if already present. Use refreshHeaders to force re-download.'
+
+    def allHeader = new File(headersDir, 'cimgui_all.h')
+
+    outputs.file(allHeader)
+
+    onlyIf("headers not yet downloaded") {
+        !allHeader.exists()
+    }
+
+    doLast {
+        headersDir.mkdirs()
+
+        def cimguiUrl  = 'https://raw.githubusercontent.com/cimgui/cimgui/master/cimgui.h'
+        def cimguiImpl = 'https://raw.githubusercontent.com/cimgui/cimgui/master/cimgui_impl.h'
+
+        logger.lifecycle("Downloading cimgui.h ...")
+        def headerFile = new File(headersDir, 'cimgui.h')
+        new URL(cimguiUrl).withInputStream { i -> headerFile.withOutputStream { o -> o << i } }
+
+        logger.lifecycle("Downloading cimgui_impl.h ...")
+        def implFile = new File(headersDir, 'cimgui_impl.h')
+        new URL(cimguiImpl).withInputStream { i -> implFile.withOutputStream { o -> o << i } }
+
+        // Combined wrapper header for jextract: type definitions from cimgui.h must be
+        // visible when processing cimgui_impl.h.
+        logger.lifecycle("Writing cimgui_all.h wrapper ...")
+        allHeader.text = [
+            '// Auto-generated wrapper: includes cimgui.h and cimgui_impl.h for jextract.',
+            '// Macros in effect: CIMGUI_DEFINE_ENUMS_AND_STRUCTS, CIMGUI_USE_OPENGL3',
+            '#include "cimgui.h"',
+            '#include "cimgui_impl.h"',
+            '',
+        ].join('\n')
+
+        logger.lifecycle("Headers written to: ${headersDir}")
+    }
+}
+
+// ---------------------------------------------------------------------------
+// generateBindings
+// ---------------------------------------------------------------------------
+
+tasks.register('generateBindings') {
+    group       = 'codegen'
+    description = 'Runs jextract against the cimgui headers and writes FFM binding sources ' +
+                  'to jimgui-binding/src/main/java/. Commit the output when satisfied.'
+
+    dependsOn ':downloadJextract', 'downloadCimguiHeaders'
+
+    doLast {
+        def allHeader = new File(headersDir, 'cimgui_all.h')
+        if (!allHeader.exists()) {
+            throw new GradleException(
+                "cimgui_all.h not found at ${allHeader}.\n" +
+                "Run './gradlew downloadCimguiHeaders' first.")
+        }
+
+        def jextract = resolveJextract()
+        bindingOutputDir.mkdirs()
+
+        logger.lifecycle("Running jextract ...")
+        logger.lifecycle("  input  : ${allHeader}")
+        logger.lifecycle("  output : ${bindingOutputDir}")
+        logger.lifecycle("  package: ${bindingPackage}")
+
+        def cmd = [jextract,
+            '--define-macro', 'CIMGUI_DEFINE_ENUMS_AND_STRUCTS',
+            '--define-macro', 'CIMGUI_USE_OPENGL3',
+            '--header-class-name', 'cimgui_h',
+            '--output', bindingOutputDir.absolutePath,
+            '--target-package', bindingPackage,
+            '--library', 'cimgui',
+            allHeader.absolutePath]
+
+        def proc = new ProcessBuilder(cmd)
+            .directory(headersDir)   // so relative #include paths inside the header resolve
+            .inheritIO()
+            .start()
+        def exit = proc.waitFor()
+        if (exit != 0) {
+            throw new GradleException(
+                "jextract failed (exit ${exit}). Check the clang output above.")
+        }
+
+        def count = bindingOutputDir.toPath()
+            .resolve(bindingPackage.replace('.', '/'))
+            .toFile().list()?.length ?: 0
+        logger.lifecycle("Done — ${count} binding source files generated.")
+        logger.lifecycle("Review, then: git add jimgui-binding/src/main/java && git commit")
+    }
+}
+
+// ---------------------------------------------------------------------------
+// refreshHeaders  — force re-download
+// ---------------------------------------------------------------------------
+
+tasks.register('refreshHeaders') {
+    group       = 'codegen'
+    description = 'Deletes cached cimgui headers and re-downloads them. ' +
+                  'Use when upgrading to a newer version of cimgui/ImGui.'
+
+    doLast {
+        ['cimgui.h', 'cimgui_impl.h', 'cimgui_all.h'].each { name ->
+            def f = new File(headersDir, name)
+            if (f.delete()) logger.lifecycle("Deleted ${f}")
+        }
+    }
+
+    finalizedBy 'downloadCimguiHeaders'
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+def resolveJextract() {
+    def isWin = System.getProperty('os.name').toLowerCase().contains('windows')
+    def names = isWin ? ['jextract.bat', 'jextract.exe', 'jextract'] : ['jextract']
+
+    for (dir in System.getenv('PATH')?.split(File.pathSeparator) ?: []) {
+        for (name in names) {
+            def f = new File(dir, name)
+            if (f.exists()) return f.absolutePath
+        }
+    }
+
+    def local = new File(rootProject.file('tools/jextract'), "bin/${isWin ? 'jextract.bat' : 'jextract'}")
+    if (local.exists()) return local.absolutePath
+
+    throw new GradleException(
+        "jextract not found on PATH or in tools/jextract/bin/.\n" +
+        "Run './gradlew downloadJextract' first.")
+}

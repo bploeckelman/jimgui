@@ -1,0 +1,231 @@
+// jimgui-native — pre-built native binaries + runtime loader.
+//
+// Native libraries live under:
+//   src/main/resources/natives/<platform>/
+//
+// Supported platforms: windows-x64, linux-x64, macos-x64, macos-arm64
+//
+// To build the native library for the current platform:
+//   ./gradlew buildNatives
+
+plugins {
+    id 'java-library'
+}
+
+group = 'net.bplo.libs'
+version = '0.1.0-SNAPSHOT'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+testing {
+    suites {
+        test {
+            useJUnitJupiter()
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Shared paths
+// ---------------------------------------------------------------------------
+
+ext {
+    cimguiSrcDir   = file("${rootDir}/tools/cimgui-src")
+    nativeBuildDir = file("${rootDir}/tools/native-build-${nativePlatformDir()}")
+}
+
+// ---------------------------------------------------------------------------
+// downloadCimguiSource
+// ---------------------------------------------------------------------------
+
+tasks.register('downloadCimguiSource') {
+    group       = 'codegen'
+    description = 'Clones the cimgui repository (with imgui submodule) into tools/cimgui-src/. ' +
+                  'Skips automatically if already present.'
+
+    // Declare an output so Gradle can skip this task when it already ran.
+    outputs.dir(cimguiSrcDir)
+
+    onlyIf("cimgui source not yet cloned") {
+        !new File(cimguiSrcDir, '.git').exists()
+    }
+
+    doLast {
+        logger.lifecycle("Cloning cimgui with imgui submodule into ${cimguiSrcDir} ...")
+        runProcess(rootDir,
+            'git', 'clone',
+            '--recurse-submodules',
+            '--depth=1',
+            'https://github.com/cimgui/cimgui.git',
+            cimguiSrcDir.absolutePath)
+        logger.lifecycle("cimgui cloned successfully.")
+    }
+}
+
+// ---------------------------------------------------------------------------
+// buildNatives
+// ---------------------------------------------------------------------------
+
+tasks.register('buildNatives') {
+    group       = 'codegen'
+    description = 'Builds the cimgui native library for the current platform and copies it ' +
+                  'into src/main/resources/natives/. Requires Visual Studio on Windows.'
+
+    dependsOn 'downloadCimguiSource'
+
+    // Declare inputs/outputs so Gradle skips this task when the DLL is up to date.
+    inputs.dir(cimguiSrcDir).withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.dir(rootProject.file('native-build')).withPathSensitivity(PathSensitivity.RELATIVE)
+
+    def outDir  = file("${projectDir}/src/main/resources/natives/${nativePlatformDir()}")
+    def outLib  = nativeLibName()
+    outputs.file(new File(outDir, outLib))
+
+    doLast {
+        outDir.mkdirs()
+        nativeBuildDir.mkdirs()
+
+        def os = System.getProperty('os.name').toLowerCase()
+        if (os.contains('windows')) {
+            buildWindows(outDir)
+        } else if (os.contains('linux')) {
+            buildUnix(outDir, outLib)
+        } else if (os.contains('mac')) {
+            buildUnix(outDir, outLib)
+        } else {
+            throw new GradleException("Unsupported platform for native build: ${os}")
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Private helpers
+// ---------------------------------------------------------------------------
+
+def buildWindows(File outDir) {
+    def cmake  = findCmake()
+    def srcDir = rootProject.file('native-build').absolutePath
+
+    // Always run configure. CMake skips actual work when nothing has changed,
+    // so this is fast on subsequent runs. Checking CMakeCache.txt is not safe
+    // because CMake can write it before configure completes, leaving the VS
+    // project files absent.
+    logger.lifecycle("Configuring CMake build (Visual Studio 17 2022, x64)...")
+    runProcess(rootDir,
+        cmake,
+        '-G', 'Visual Studio 17 2022', '-A', 'x64',
+        "-DCIMGUI_SRC_DIR=${cimguiSrcDir.absolutePath.replace('\\', '/')}",
+        '-S', srcDir.replace('\\', '/'),
+        '-B', nativeBuildDir.absolutePath.replace('\\', '/'))
+
+    logger.lifecycle("Building Release configuration...")
+    runProcess(rootDir,
+        cmake, '--build', nativeBuildDir.absolutePath, '--config', 'Release')
+
+    copyNative(new File(nativeBuildDir, 'Release/cimgui.dll'), new File(outDir, 'cimgui.dll'))
+}
+
+def buildUnix(File outDir, String libName) {
+    def cmake  = findCmake()
+    def srcDir = rootProject.file('native-build').absolutePath
+
+    logger.lifecycle("Configuring CMake build (Ninja, Release)...")
+    runProcess(nativeBuildDir,
+        cmake, '-G', 'Ninja', '-DCMAKE_BUILD_TYPE=Release',
+        "-DCIMGUI_SRC_DIR=${cimguiSrcDir.absolutePath.replace('\\', '/')}",
+        srcDir.replace('\\', '/'))
+
+    logger.lifecycle("Building...")
+    runProcess(nativeBuildDir, cmake, '--build', '.', '--config', 'Release')
+
+    copyNative(new File(nativeBuildDir, libName), new File(outDir, libName))
+}
+
+def copyNative(File src, File dst) {
+    if (!src.exists()) {
+        throw new GradleException(
+            "Build completed but native library not found at: ${src}\n" +
+            "Check the CMake output above for compilation errors.")
+    }
+    java.nio.file.Files.copy(
+        src.toPath(), dst.toPath(),
+        java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+    logger.lifecycle("Native library written to: ${dst}")
+}
+
+def findCmake() {
+    def isWin = isWindows()
+    def exe   = isWin ? 'cmake.exe' : 'cmake'
+
+    // Check PATH first
+    def onPath = System.getenv('PATH')?.split(File.pathSeparator)
+        ?.collect { new File(it, exe) }
+        ?.find    { it.exists() }
+    if (onPath) return onPath.absolutePath
+
+    // CMake bundled with Visual Studio 2022
+    if (isWin) {
+        def vsCmake = new File(
+            'C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/' +
+            'CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe')
+        if (vsCmake.exists()) return vsCmake.absolutePath
+    }
+
+    throw new GradleException(
+        "cmake not found on PATH and not found in the Visual Studio 2022 install.\n" +
+        "Install CMake from https://cmake.org or install the Visual Studio C++ workload.")
+}
+
+def nativePlatformDir() {
+    def os   = System.getProperty('os.name').toLowerCase()
+    def arch = System.getProperty('os.arch').toLowerCase()
+    if (os.contains('windows'))                                   return 'windows-x64'
+    if (os.contains('linux'))   return arch.contains('aarch64')  ? 'linux-arm64'  : 'linux-x64'
+    if (os.contains('mac'))     return (arch == 'aarch64' || arch == 'arm64') ? 'macos-arm64' : 'macos-x64'
+    throw new GradleException("Unsupported OS for native build: ${os}")
+}
+
+def nativeLibName() {
+    def os = System.getProperty('os.name').toLowerCase()
+    if (os.contains('windows')) return 'cimgui.dll'
+    if (os.contains('linux'))   return 'libcimgui.so'
+    if (os.contains('mac'))     return 'libcimgui.dylib'
+    throw new GradleException("Unsupported OS for native build: ${os}")
+}
+
+def isWindows() {
+    return System.getProperty('os.name').toLowerCase().contains('windows')
+}
+
+def runProcess(File workDir, String... cmd) {
+    logger.lifecycle("> ${cmd.join(' ')}")
+    def proc = new ProcessBuilder(cmd.toList())
+        .directory(workDir)
+        .redirectErrorStream(true)   // merge stderr into stdout
+        .start()
+
+    // Drain output on a background thread so the process never blocks on a full pipe buffer.
+    def output = new StringBuilder()
+    def drainer = Thread.start {
+        proc.inputStream.eachLine { line ->
+            output.append(line).append('\n')
+            logger.lifecycle("  ${line}")
+        }
+    }
+    drainer.join()
+    def exit = proc.waitFor()
+
+    if (exit != 0) {
+        throw new GradleException(
+            "Command failed (exit ${exit}): ${cmd.join(' ')}\n" +
+            "--- output ---\n${output}--- end output ---")
+    }
+}

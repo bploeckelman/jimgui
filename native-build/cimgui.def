@@ -1,0 +1,16 @@
+; cimgui.def — Module definition file for cimgui.dll
+;
+; Exports the OpenGL3 backend wrapper functions under the canonical
+; ImGui_ImplOpenGL3_* names that the jextract-generated Java bindings expect.
+; The internal C names (w_ImplOpenGL3_*) are aliased here to the public names.
+
+LIBRARY cimgui
+
+EXPORTS
+    ImGui_ImplOpenGL3_Init               = w_ImplOpenGL3_Init
+    ImGui_ImplOpenGL3_Shutdown           = w_ImplOpenGL3_Shutdown
+    ImGui_ImplOpenGL3_NewFrame           = w_ImplOpenGL3_NewFrame
+    ImGui_ImplOpenGL3_RenderDrawData     = w_ImplOpenGL3_RenderDrawData
+    ImGui_ImplOpenGL3_CreateDeviceObjects = w_ImplOpenGL3_CreateDeviceObjects
+    ImGui_ImplOpenGL3_DestroyDeviceObjects = w_ImplOpenGL3_DestroyDeviceObjects
+    ImGui_ImplOpenGL3_UpdateTexture      = w_ImplOpenGL3_UpdateTexture

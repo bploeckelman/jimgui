@@ -1,0 +1,122 @@
+// Root build file — shared configuration only. Keep it boring.
+//
+// Codegen tasks (not part of the normal build lifecycle):
+//   ./gradlew downloadJextract      — fetches jextract if not on PATH or in tools/
+//   ./gradlew generateBindings      — runs jextract → jimgui-binding/src/main/java/
+
+// ---------------------------------------------------------------------------
+// jextract configuration
+// ---------------------------------------------------------------------------
+
+ext {
+    // EA build of jextract bundled with its own JVM — runs independently of
+    // the project's Java toolchain.
+    jextractBaseUrl  = 'https://download.java.net/java/early_access/jextract/25/2'
+    jextractBaseName = 'openjdk-25-jextract+2-4'
+    jextractDir      = file("${rootDir}/tools/jextract")
+}
+
+// ---------------------------------------------------------------------------
+// downloadJextract
+// ---------------------------------------------------------------------------
+
+tasks.register('downloadJextract') {
+    group       = 'codegen'
+    description = 'Downloads jextract for the current platform if not already on PATH or in tools/.'
+
+    doLast {
+        // 1. Already on PATH?
+        if (findOnPath('jextract')) {
+            logger.lifecycle('jextract is already on PATH — nothing to download.')
+            return
+        }
+
+        // 2. Already extracted into tools/?
+        def localExe = jextractLocalExecutable()
+        if (localExe.exists()) {
+            logger.lifecycle("jextract already present at: ${localExe}")
+            return
+        }
+
+        // 3. Download and extract.
+        def platform = detectPlatform()
+        def archive  = "${jextractBaseName}_${platform}_bin.tar.gz"
+        def url      = "${jextractBaseUrl}/${archive}"
+
+        logger.lifecycle("Downloading jextract from:\n  ${url}")
+
+        jextractDir.mkdirs()
+        def archiveFile = new File(jextractDir, archive)
+
+        // Download
+        new URL(url).withInputStream { input ->
+            archiveFile.withOutputStream { out -> out << input }
+        }
+
+        // Extract (tar is available on Windows 10+, Linux, macOS)
+        runProcess(jextractDir, 'tar', 'xzf', archiveFile.absolutePath, '--strip-components=1')
+        archiveFile.delete()
+
+        if (!isWindows()) {
+            runProcess(jextractDir, 'chmod', '+x', localExe.absolutePath)
+        }
+
+        logger.lifecycle("jextract installed at: ${jextractDir}")
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+def findOnPath(String exe) {
+    def pathDirs = System.getenv('PATH')?.split(File.pathSeparator) ?: []
+    def names    = isWindows() ? ["${exe}.bat", "${exe}.exe", exe] : [exe]
+    return pathDirs.any { dir -> names.any { name -> new File(dir, name).exists() } }
+}
+
+def jextractExecutable() {
+    // Prefer PATH, fall back to tools/ download.
+    def pathDirs = System.getenv('PATH')?.split(File.pathSeparator) ?: []
+    def names    = isWindows() ? ['jextract.bat', 'jextract.exe', 'jextract'] : ['jextract']
+    for (dir in pathDirs) {
+        for (name in names) {
+            def f = new File(dir, name)
+            if (f.exists()) return f.absolutePath
+        }
+    }
+    return jextractLocalExecutable().absolutePath
+}
+
+def jextractLocalExecutable() {
+    def name = isWindows() ? 'jextract.bat' : 'jextract'
+    return new File(jextractDir, "bin/${name}")
+}
+
+def isWindows() {
+    return System.getProperty('os.name').toLowerCase().contains('windows')
+}
+
+def runProcess(File workDir, String... cmd) {
+    def proc = new ProcessBuilder(cmd)
+        .directory(workDir)
+        .inheritIO()
+        .start()
+    def exit = proc.waitFor()
+    if (exit != 0) {
+        throw new GradleException("Command failed (exit ${exit}): ${cmd.join(' ')}")
+    }
+}
+
+def detectPlatform() {
+    def os   = System.getProperty('os.name').toLowerCase()
+    def arch = System.getProperty('os.arch').toLowerCase()
+    if (os.contains('windows')) return 'windows-x64'
+    if (os.contains('linux')) {
+        return (arch == 'aarch64') ? 'linux-aarch64' : 'linux-x64'
+    }
+    if (os.contains('mac')) {
+        return (arch == 'aarch64' || arch == 'arm64') ? 'macos-aarch64' : 'macos-x64'
+    }
+    throw new GradleException("Unsupported platform for jextract: ${os} / ${arch}")
+}
