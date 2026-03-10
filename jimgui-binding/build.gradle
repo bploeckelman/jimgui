@@ -13,8 +13,6 @@ plugins {
     id 'java-library'
 }
 
-group   = 'net.bplo.libs'
-version = '0.1.0-SNAPSHOT'
 
 java {
     toolchain {
