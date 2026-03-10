@@ -104,6 +104,12 @@ tasks.register('buildNatives') {
     }
 }
 
+// processResources and sourcesJar both consume src/main/resources/ which is
+// where buildNatives writes the native library — declare the dependency here,
+// outside the register block, where cross-task wiring is allowed.
+tasks.named('processResources').configure { dependsOn('buildNatives') }
+tasks.named('sourcesJar').configure       { dependsOn('buildNatives') }
+
 // ---------------------------------------------------------------------------
 // Private helpers
 // ---------------------------------------------------------------------------

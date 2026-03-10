@@ -3,8 +3,8 @@
 build/
 **/build/
 
-# jextract binary (downloaded automatically by ./gradlew downloadJextract)
-tools/jextract/
+# tools/ — all downloaded/generated, nothing here should be committed
+tools/
 
 # IntelliJ IDEA
 .idea/
