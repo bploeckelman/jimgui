@@ -4,6 +4,8 @@ import net.bplo.libs.jimgui.binding.*;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
+import java.util.Objects;
+import java.util.Optional;
 
 @SuppressWarnings("resource") // For arena refs, ignoring auto-closeable
 public final class ImGui {
@@ -108,6 +110,95 @@ public final class ImGui {
     // Widgets
     // ------------------------------------------------------------------------
 
+    public static boolean button(String label, float width, float height) {
+        var size = imVec2(width, height);
+        return cimgui_h.igButton(frameArena().allocateFrom(label), size);
+    }
+
+    public static boolean smallButton(String label) {
+        return cimgui_h.igSmallButton(frameArena().allocateFrom(label));
+    }
+
+    public static boolean invisibleButton(String id, float width, float height) {
+        return invisibleButton(id, width, height, 0);
+    }
+
+    public static boolean invisibleButton(String id, float width, float height, int buttonFlags) {
+        var size = imVec2(width, height);
+        return cimgui_h.igInvisibleButton(frameArena().allocateFrom(id), size, buttonFlags);
+    }
+
+    // TODO: dir -> ImGuiDir dir... I assume ImGuiDir is a directional enum for the arrow direction
+    public static boolean arrowButton(String id, int dir) {
+        return cimgui_h.igArrowButton(frameArena().allocateFrom(id), dir);
+    }
+
+    public record Bool(boolean[] value) {
+        public Bool()           { this(new boolean[] { false }); }
+        public Bool(boolean v)  { this(new boolean[] { v }); }
+        public boolean get()       { return value[0]; }
+        public void set(boolean v) { value[0] = v; }
+    }
+
+    public static boolean checkbox(String label, Bool v) {
+        var pV = frameArena().allocate(cimgui_h.C_BOOL);
+        pV.set(cimgui_h.C_BOOL, 0, v.get());
+        var clicked = cimgui_h.igCheckbox(frameArena().allocateFrom(label), pV);
+        v.set(pV.get(cimgui_h.C_BOOL, 0));
+        return clicked;
+    }
+
+    public record Int(int[] value) {
+        public Int()           { this(new int[] { 0 }); }
+        public Int(int v)      { this(new int[] { v }); }
+        public int get()       { return value[0]; }
+        public void set(int v) { value[0] = v; }
+    }
+
+    public static boolean checkboxFlags(String label, Int flags, int flagValue) {
+        var pFlags = frameArena().allocate(cimgui_h.C_INT);
+        pFlags.set(cimgui_h.C_INT, 0, flags.get());
+        var clicked = cimgui_h.igCheckboxFlags_IntPtr(frameArena().allocateFrom(label), pFlags, flagValue);
+        flags.set(pFlags.get(cimgui_h.C_INT, 0));
+        return clicked;
+    }
+
+    public static boolean radioButton(String label, boolean active) {
+        return cimgui_h.igRadioButton_Bool(frameArena().allocateFrom(label), active);
+    }
+
+    public static boolean radioButton(String label, Int v, int vButton) {
+        var pV = frameArena().allocate(cimgui_h.C_INT);
+        pV.set(cimgui_h.C_INT, 0, v.get());
+        var clicked = cimgui_h.igRadioButton_IntPtr(frameArena().allocateFrom(label), pV, vButton);
+        v.set(pV.get(cimgui_h.C_INT, 0));
+        return clicked;
+    }
+
+    public static void progressBar(float fraction, float width, float height) {
+        progressBar(fraction, width, height, null);
+    }
+
+    public static void progressBar(float fraction, float width, float height, String overlay) {
+        var size = imVec2(width, height);
+        var overlayStr = (overlay == null) ? MemorySegment.NULL : frameArena().allocateFrom(overlay);
+        cimgui_h.igProgressBar(fraction, size, overlayStr);
+    }
+
+    public static void bullet() {
+        cimgui_h.igBullet();
+    }
+
+    public static boolean textLink(String label) {
+        return cimgui_h.igTextLink(frameArena().allocateFrom(label));
+    }
+
+    public static boolean textLinkOpenURL(String label, String url) {
+        var urlStr = (url == null) ? MemorySegment.NULL : frameArena().allocateFrom(url);
+        return cimgui_h.igTextLinkOpenURL(frameArena().allocateFrom(label), urlStr);
+    }
+
+    // TODO: images, combo box / dropdown
 
     // ------------------------------------------------------------------------
     // Drag, Slider, Input
@@ -118,6 +209,13 @@ public final class ImGui {
     // Layout
     // ------------------------------------------------------------------------
 
+    public static void sameLine() {
+        sameLine(0, -1);
+    }
+
+    public static void sameLine(float offsetFromStartX, float spacing) {
+        cimgui_h.igSameLine(offsetFromStartX, spacing);
+    }
 
     // ------------------------------------------------------------------------
     // ID Stack
@@ -147,6 +245,13 @@ public final class ImGui {
     // ------------------------------------------------------------------------
     // Util
     // ------------------------------------------------------------------------
+
+    private static MemorySegment imVec2(float x, float y) {
+        var vec = ImVec2_c.allocate(frameArena());
+        ImVec2_c.x(vec, x);
+        ImVec2_c.y(vec, y);
+        return vec;
+    }
 
     private static MemorySegment imVec4(float x, float y, float z, float w) {
         var vec = ImVec4_c.allocate(frameArena());
