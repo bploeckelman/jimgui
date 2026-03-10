@@ -34,6 +34,9 @@ public final class ImGuiManager {
 
     private static final AtomicBoolean initialized = new AtomicBoolean(false);
 
+    static Arena frameArena;
+    static Arena persistentArena;
+
     private ImGuiManager() {}
 
     /**
@@ -58,13 +61,16 @@ public final class ImGuiManager {
 
         try (Arena arena = Arena.ofConfined()) {
             var version = arena.allocateFrom(glslVersion);
-            boolean ok = cimgui_h.ImGui_ImplOpenGL3_Init(version);
+            var ok = cimgui_h.ImGui_ImplOpenGL3_Init(version);
             if (!ok) {
                 throw new IllegalStateException(
                     "ImGui_ImplOpenGL3_Init failed. Ensure an OpenGL context is current " +
                     "before calling ImGuiManager.init().");
             }
         }
+
+        frameArena = null;
+        persistentArena = Arena.ofConfined();
     }
 
     /**
@@ -88,6 +94,7 @@ public final class ImGuiManager {
         ImVec2_c.y(displaySize, Gdx.graphics.getHeight());
         ImGuiIO.DeltaTime(io, Gdx.graphics.getDeltaTime());
 
+        frameArena = Arena.ofConfined();
         cimgui_h.ImGui_ImplOpenGL3_NewFrame();
         cimgui_h.igNewFrame();
     }
@@ -99,6 +106,8 @@ public final class ImGuiManager {
     public static void render() {
         cimgui_h.igRender();
         cimgui_h.ImGui_ImplOpenGL3_RenderDrawData(cimgui_h.igGetDrawData());
+        frameArena.close();
+        frameArena = null;
     }
 
     /**
@@ -107,6 +116,7 @@ public final class ImGuiManager {
      */
     public static void dispose() {
         if (!initialized.get()) return;
+        persistentArena.close();
         cimgui_h.ImGui_ImplOpenGL3_Shutdown();
         cimgui_h.igDestroyContext(MemorySegment.NULL);
         initialized.set(false);
