@@ -17,7 +17,7 @@ public final class ImGui {
     }
 
     // =================================================================================================================
-    // Return value types for conveniently wrapping MemorySegment values returned from method calls
+    // region Return value types for conveniently wrapping MemorySegment values returned from method calls
     // =================================================================================================================
 
     public record Vec2f(float x, float y) {}
@@ -33,9 +33,10 @@ public final class ImGui {
 
     public record Color3i(int r, int g, int b) {}
     public record Color4i(int r, int g, int b, int a) {}
+    //endregion
 
     // =================================================================================================================
-    // Output value types for method parameters that get written to in a method call
+    // region Output value types for method parameters that get written to in a method call
     // =================================================================================================================
 
     public record BoolArg(boolean[] value) {
@@ -58,9 +59,10 @@ public final class ImGui {
         public float get()       { return value[0]; }
         public void set(float v) { value[0] = v; }
     }
+    //endregion
 
     // =================================================================================================================
-    // Cached Invokers
+    // region Cached Invokers
     // =================================================================================================================
 
     private static final cimgui_h.igTextColored TEXT_COLORED = cimgui_h.igTextColored.makeInvoker();
@@ -68,9 +70,10 @@ public final class ImGui {
     private static final cimgui_h.igTextWrapped TEXT_WRAPPED = cimgui_h.igTextWrapped.makeInvoker();
     private static final cimgui_h.igLabelText LABEL_TEXT = cimgui_h.igLabelText.makeInvoker();
     private static final cimgui_h.igBulletText BULLET_TEXT = cimgui_h.igBulletText.makeInvoker();
+    //endregion
 
     // =================================================================================================================
-    // Demo, Debug, Information
+    // region Demo, Debug, Information
     // =================================================================================================================
 
     public static void showDemoWindow(BoolArg open) {
@@ -137,9 +140,10 @@ public final class ImGui {
         var versionPtr = cimgui_h.igGetVersion();
         return versionPtr.getString(0);
     }
+    //endregion
 
     // =================================================================================================================
-    // Styles
+    // region Styles
     // =================================================================================================================
 
     public static void styleColorsDark() {
@@ -165,9 +169,10 @@ public final class ImGui {
     public static void styleColorsClassic(MemorySegment imGuiStyle) {
         cimgui_h.igStyleColorsClassic(imGuiStyle);
     }
+    //endregion
 
     // =================================================================================================================
-    // Windows
+    // region Windows
     // - Begin() = push window to the stack and start appending to it. End() = pop window from the stack.
     // - Passing 'bool* p_open != NULL' shows a window-closing widget in the upper-right corner of the window,
     //   which clicking will set the boolean to false when clicked.
@@ -201,9 +206,10 @@ public final class ImGui {
     public static void end() {
         cimgui_h.igEnd();
     }
+    //endregion
 
     // =================================================================================================================
-    // Child Windows
+    // region Child Windows
     // - Use child windows to begin into a self-contained independent scrolling/clipping regions within a host window. Child windows can embed their own child.
     // - Before 1.90 (November 2023), the "ImGuiChildFlags child_flags = 0" parameter was "bool border = false".
     //   This API is backward compatible with old code, as we guarantee that ImGuiChildFlags_Borders == true.
@@ -244,9 +250,10 @@ public final class ImGui {
     public static void endChild() {
         cimgui_h.igEndChild();
     }
+    //endregion
 
     // =================================================================================================================
-    // Window Utilities
+    // region Window Utilities
     // - 'current window' = the window we are appending into while inside a Begin()/End() block. 'next window' = next window we will Begin() into.
     // =================================================================================================================
 
@@ -352,12 +359,12 @@ public final class ImGui {
     public static float getWindowHeight() {
         return cimgui_h.igGetWindowHeight();
     }
+    //endregion
 
     // =================================================================================================================
-    // Window manipulation
+    // region Window manipulation
     // - Prefer using SetNextXXX functions (before Begin) rather that SetXXX functions (after Begin).
     // =================================================================================================================
-
 
     /**
      * Set next window position. call before {@link #begin}.
@@ -554,9 +561,10 @@ public final class ImGui {
     public static void setWindowFocus(String name) {
         cimgui_h.igSetWindowFocus_Str(frameArena().allocateFrom(name));
     }
+    // endregion
 
     // =================================================================================================================
-    // Windows Scrolling
+    // region Windows Scrolling
     // - Any change of Scroll will be applied at the beginning of next frame in the first call to Begin().
     // - You may instead use SetNextWindowScroll() prior to calling Begin() to avoid this delay, as an alternative to using SetScrollX()/SetScrollY().
     // =================================================================================================================
@@ -662,9 +670,10 @@ public final class ImGui {
     public static void setScrollFromPosY(float localY, float centerYRatio) {
         cimgui_h.igSetScrollFromPosY_Float(localY, centerYRatio);
     }
+    //endregion
 
     // =================================================================================================================
-    // TODO: Parameters stacks (font)
+    // region TODO: Parameters stacks (font)
     //  - PushFont(font, 0.0f)                       // Change font and keep current size
     //  - PushFont(NULL, 20.0f)                      // Keep font and change current size
     //  - PushFont(font, 20.0f)                      // Change font and set size to 20.0f
@@ -687,9 +696,10 @@ public final class ImGui {
 //    IMGUI_API ImFont*       GetFont();                                                      // get current font
 //    IMGUI_API float         GetFontSize();                                                  // get current scaled font size (= height in pixels). AFTER global scale factors applied. *IMPORTANT* DO NOT PASS THIS VALUE TO PushFont()! Use ImGui::GetStyle().FontSizeBase to get value before global scale factors.
 //    IMGUI_API ImFontBaked*  GetFontBaked();                                                 // get current font bound at current size // == GetFont()->GetFontBaked(GetFontSize())
+    // endregion
 
     // =================================================================================================================
-    // TODO: Parameters stacks (shared)
+    // region TODO: Parameters stacks (shared)
     // =================================================================================================================
 
 //    IMGUI_API void          PushStyleColor(ImGuiCol idx, ImU32 col);                        // modify a style color. always use this if you modify the style after NewFrame().
@@ -702,9 +712,10 @@ public final class ImGui {
 //    IMGUI_API void          PopStyleVar(int count = 1);
 //    IMGUI_API void          PushItemFlag(ImGuiItemFlags option, bool enabled);              // modify specified shared item flag, e.g. PushItemFlag(ImGuiItemFlags_NoTabStop, true)
 //    IMGUI_API void          PopItemFlag();
+    // endregion
 
     // =================================================================================================================
-    // TODO: Parameters stacks (current window)
+    // region TODO: Parameters stacks (current window)
     // =================================================================================================================
 
 //    IMGUI_API void          PushItemWidth(float item_width);                                // push width of items for common large "item+label" widgets. >0.0f: width in pixels, <0.0f align xx pixels to the right of window (so -FLT_MIN always align width to the right side).
@@ -713,9 +724,10 @@ public final class ImGui {
 //    IMGUI_API float         CalcItemWidth();                                                // width of item given pushed settings and current cursor position. NOT necessarily the width of last item unlike most 'Item' functions.
 //    IMGUI_API void          PushTextWrapPos(float wrap_local_pos_x = 0.0f);                 // push word-wrapping position for Text*() commands. < 0.0f: no wrapping; 0.0f: wrap to end of window (or column); > 0.0f: wrap at 'wrap_pos_x' position in window local space
 //    IMGUI_API void          PopTextWrapPos();
+    // endregion
 
     // =================================================================================================================
-    // Style read access
+    // region TODO: Style read access
     // - Use the ShowStyleEditor() function to interactively see/edit the colors.
     // =================================================================================================================
 
@@ -724,9 +736,10 @@ public final class ImGui {
 //    IMGUI_API ImU32         GetColorU32(const ImVec4& col);                                 // retrieve given color with style alpha applied, packed as a 32-bit value suitable for ImDrawList
 //    IMGUI_API ImU32         GetColorU32(ImU32 col, float alpha_mul = 1.0f);                 // retrieve given color with style alpha applied, packed as a 32-bit value suitable for ImDrawList
 //    IMGUI_API const ImVec4& GetStyleColorVec4(ImGuiCol idx);                                // retrieve style color as stored in ImGuiStyle structure. use to feed back into PushStyleColor(), otherwise use GetColorU32() to get style color with style alpha baked in.
+    // endregion
 
     // =================================================================================================================
-    // Layout cursor positioning
+    // region Layout cursor positioning
     // - By "cursor" we mean the current output position.
     // - The typical widget behavior is to output themselves at the current cursor position, then move the cursor one line down.
     // - You can call SameLine() between widgets to undo the last carriage return and output at the right of the preceding widget.
@@ -800,9 +813,34 @@ public final class ImGui {
         cimgui_h.igSetCursorPos(pos);
     }
 
+    /**
+     * [window-local] Set cursor position x coordinate in window-local coordinates.
+     * <strong>This is NOT your best friend.</strong>
+     */
+    public static void setCursorPosX(float windowLocalX) {
+        cimgui_h.igSetCursorPosX(windowLocalX);
+    }
+
+    /**
+     * [window-local] Set cursor position y coordinate in window-local coordinates.
+     * <strong>This is NOT your best friend.</strong>
+     */
+    public static void setCursorPosY(float windowLocalY) {
+        cimgui_h.igSetCursorPosY(windowLocalY);
+    }
+
+    /**
+     * [window-local] Initial cursor position, in window-local coordinates.
+     * Call GetCursorScreenPos() after Begin() to get the absolute coordinates version.
+     */
+    public static Vec2f getCursorStartPos() {
+        var result = cimgui_h.igGetCursorStartPos(frameArena());
+        return new Vec2f(ImVec2_c.x(result), ImVec2_c.y(result));
+    }
+    // endregion
 
     // =================================================================================================================
-    // TODO: Other layout functions
+    // region TODO: Other layout functions
     // =================================================================================================================
 
 //    IMGUI_API void          Separator();                                                    // separator, generally horizontal. inside a menu bar or in horizontal layout mode, this becomes a vertical separator.
@@ -833,9 +871,10 @@ public final class ImGui {
 //    IMGUI_API float         GetTextLineHeightWithSpacing();                                 // ~ FontSize + style.ItemSpacing.y (distance in pixels between 2 consecutive lines of text)
 //    IMGUI_API float         GetFrameHeight();                                               // ~ FontSize + style.FramePadding.y * 2
 //    IMGUI_API float         GetFrameHeightWithSpacing();                                    // ~ FontSize + style.FramePadding.y * 2 + style.ItemSpacing.y (distance in pixels between 2 consecutive lines of framed widgets)
+    // endregion
 
     // =================================================================================================================
-    // TODO: ID stack/scopes
+    // region TODO: ID stack/scopes
     // Read the FAQ (docs/FAQ.md or http://dearimgui.com/faq) for more details about how ID are handled in dear imgui.
     // - Those questions are answered and impacted by understanding of the ID stack system:
     //   - "Q: Why is my widget not reacting when I click on it?"
@@ -857,9 +896,10 @@ public final class ImGui {
 //    IMGUI_API ImGuiID       GetID(const char* str_id_begin, const char* str_id_end);
 //    IMGUI_API ImGuiID       GetID(const void* ptr_id);
 //    IMGUI_API ImGuiID       GetID(int int_id);
+    // endregion
 
     // =================================================================================================================
-    // Widgets: Text
+    // region Widgets: Text
     // - some functions only have variadic versions which require special handling
     // - jextract doesn't create 'nice' versions of variadic functions so we manually create invokers which are cached across calls
     // - since any '%' character in the provided format string args would cause problems due to attempted sprintf'ing, we defensively escape them
@@ -932,12 +972,13 @@ public final class ImGui {
         var safeText = label.replaceAll("%", "%%");
         cimgui_h.igSeparatorText(frameArena().allocateFrom(safeText));
     }
+    // endregion
 
-    // ------------------------------------------------------------------------
-    // Widgets: Main
+    // =================================================================================================================
+    // region TODO: Widgets: Main
     // - Most widgets return true when the value has been changed or when pressed/selected
     // - You may also use one of the many IsItemXXX functions (e.g. IsItemActive, IsItemHovered, etc.) to query widget state.
-    // ------------------------------------------------------------------------
+    // =================================================================================================================
 
     /**
      * Button
@@ -1051,10 +1092,11 @@ public final class ImGui {
 
 
 
+    // endregion
 
-    // ------------------------------------------------------------------------
-    // Utility
-    // ------------------------------------------------------------------------
+    // -----------------------------------------------------------------------------------------------------------------
+    // region Utility methods
+    // -----------------------------------------------------------------------------------------------------------------
 
     private static MemorySegment imVec2(float x, float y) {
         var vec = ImVec2_c.allocate(frameArena());
@@ -1071,4 +1113,5 @@ public final class ImGui {
         ImVec4_c.w(vec, w);
         return vec;
     }
+    // endregion
 }
