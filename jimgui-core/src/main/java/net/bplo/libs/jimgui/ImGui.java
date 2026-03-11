@@ -840,10 +840,15 @@ public final class ImGui {
     // endregion
 
     // =================================================================================================================
-    // region TODO: Other layout functions
+    // region Other layout functions
     // =================================================================================================================
 
-//    IMGUI_API void          Separator();                                                    // separator, generally horizontal. inside a menu bar or in horizontal layout mode, this becomes a vertical separator.
+    /**
+     * Separator, generally horizontal. inside a menu bar or in horizontal layout mode, this becomes a vertical separator.
+     */
+    public static void separator() {
+        cimgui_h.igSeparator();
+    }
 
     /**
      * Call between widgets or groups to layout them horizontally.
@@ -859,18 +864,106 @@ public final class ImGui {
         cimgui_h.igSameLine(offsetFromStartX, spacing);
     }
 
-//    IMGUI_API void          NewLine();                                                      // undo a SameLine() or force a new line when in a horizontal-layout context.
-//    IMGUI_API void          Spacing();                                                      // add vertical spacing.
-//    IMGUI_API void          Dummy(const ImVec2& size);                                      // add a dummy item of given size. unlike InvisibleButton(), Dummy() won't take the mouse click or be navigable into.
-//    IMGUI_API void          Indent(float indent_w = 0.0f);                                  // move content position toward the right, by indent_w, or style.IndentSpacing if indent_w <= 0
-//    IMGUI_API void          Unindent(float indent_w = 0.0f);                                // move content position back to the left, by indent_w, or style.IndentSpacing if indent_w <= 0
-//    IMGUI_API void          BeginGroup();                                                   // lock horizontal starting position
-//    IMGUI_API void          EndGroup();                                                     // unlock horizontal starting position + capture the whole group bounding box into one "item" (so you can use IsItemHovered() or layout primitives such as SameLine() on whole group, etc.)
-//    IMGUI_API void          AlignTextToFramePadding();                                      // vertically align upcoming text baseline to FramePadding.y so that it will align properly to regularly framed items (call if you have text on a line before a framed item)
-//    IMGUI_API float         GetTextLineHeight();                                            // ~ FontSize
-//    IMGUI_API float         GetTextLineHeightWithSpacing();                                 // ~ FontSize + style.ItemSpacing.y (distance in pixels between 2 consecutive lines of text)
-//    IMGUI_API float         GetFrameHeight();                                               // ~ FontSize + style.FramePadding.y * 2
-//    IMGUI_API float         GetFrameHeightWithSpacing();                                    // ~ FontSize + style.FramePadding.y * 2 + style.ItemSpacing.y (distance in pixels between 2 consecutive lines of framed widgets)
+    /**
+     * Undo a SameLine() or force a new line when in a horizontal-layout context.
+     */
+    public static void newLine() {
+        cimgui_h.igNewLine();
+    }
+
+    /**
+     * Add vertical spacing.
+     */
+    public static void spacing() {
+        cimgui_h.igSpacing();
+    }
+
+    /**
+     * Add a dummy item of given size. unlike InvisibleButton(), Dummy() won't take the mouse click or be navigable into.
+     */
+    public static void dummy(float width, float height) {
+        var size = imVec2(width, height);
+        cimgui_h.igDummy(size);
+    }
+
+    /**
+     * Move content position toward the right, by indent_w, or style. IndentSpacing if indent_w <= 0
+     */
+    public static void indent() {
+        indent(0);
+    }
+
+    /**
+     * Move content position toward the right, by indent_w, or style. IndentSpacing if indent_w <= 0
+     */
+    public static void indent(float indentW) {
+        cimgui_h.igIndent(indentW);
+    }
+
+    /**
+     * Move content position back to the left, by indent_w, or style.IndentSpacing if indent_w <= 0
+     */
+    public static void unindent() {
+        unindent(0);
+    }
+
+    /**
+     * Move content position back to the left, by indent_w, or style.IndentSpacing if indent_w <= 0
+     */
+    public static void unindent(float indentW) {
+        cimgui_h.igUnindent(indentW);
+    }
+
+    /**
+     * Lock horizontal starting position
+     */
+    public static void beginGroup() {
+        cimgui_h.igBeginGroup();
+    }
+
+    /**
+     * Unlock horizontal starting position + capture the whole group bounding box into one "item"
+     * (so you can use IsItemHovered() or layout primitives such as SameLine() on whole group, etc.)
+     */
+    public static void endGroup() {
+        cimgui_h.igEndGroup();
+    }
+
+    /**
+     * Vertically align upcoming text baseline to FramePadding.y so that it will align properly to regularly framed items
+     * (call if you have text on a line before a framed item)
+     */
+    public static void alignTextToFramePadding() {
+        cimgui_h.igAlignTextToFramePadding();
+    }
+
+    /**
+     * ~ FontSize
+     */
+    public static float getTextLineHeight() {
+        return cimgui_h.igGetTextLineHeight();
+    }
+
+    /**
+     * ~ FontSize + style.ItemSpacing.y (distance in pixels between 2 consecutive lines of text)
+     */
+    public static float getTextLineHeightWithSpacing() {
+        return cimgui_h.igGetTextLineHeightWithSpacing();
+    }
+
+    /**
+     * ~ FontSize + style.FramePadding.y * 2
+     */
+    public static float getFrameHeight() {
+        return cimgui_h.igGetFrameHeight();
+    }
+
+    /**
+     * ~ FontSize + style.FramePadding.y * 2 + style.ItemSpacing.y (distance in pixels between 2 consecutive lines of framed widgets)
+     */
+    public static float getFrameHeightWithSpacing() {
+        return cimgui_h.igGetFrameHeightWithSpacing();
+    }
     // endregion
 
     // =================================================================================================================
