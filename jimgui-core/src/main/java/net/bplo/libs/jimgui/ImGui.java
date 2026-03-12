@@ -1,6 +1,7 @@
 package net.bplo.libs.jimgui;
 
 import net.bplo.libs.jimgui.binding.*;
+import org.w3c.dom.Text;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -790,15 +791,65 @@ public final class ImGui {
     // endregion
 
     // =================================================================================================================
-    // region TODO: Parameters stacks (current window)
+    // region Parameters stacks (current window)
     // =================================================================================================================
 
-//    IMGUI_API void          PushItemWidth(float item_width);                                // push width of items for common large "item+label" widgets. >0.0f: width in pixels, <0.0f align xx pixels to the right of window (so -FLT_MIN always align width to the right side).
-//    IMGUI_API void          PopItemWidth();
-//    IMGUI_API void          SetNextItemWidth(float item_width);                             // set width of the _next_ common large "item+label" widget. >0.0f: width in pixels, <0.0f align xx pixels to the right of window (so -FLT_MIN always align width to the right side)
-//    IMGUI_API float         CalcItemWidth();                                                // width of item given pushed settings and current cursor position. NOT necessarily the width of last item unlike most 'Item' functions.
-//    IMGUI_API void          PushTextWrapPos(float wrap_local_pos_x = 0.0f);                 // push word-wrapping position for Text*() commands. < 0.0f: no wrapping; 0.0f: wrap to end of window (or column); > 0.0f: wrap at 'wrap_pos_x' position in window local space
-//    IMGUI_API void          PopTextWrapPos();
+    /**
+     * Push width of items for common large "item+label" widgets.
+     * >0.0f: width in pixels,
+     * <0.0f align xx pixels to the right of window (so -FLT_MIN always align width to the right side).
+     */
+    public static void pushItemWidth(float itemWidth) {
+        cimgui_h.igPushItemWidth(itemWidth);
+    }
+
+    /**
+     * Pop the last item width off the stack (pushed via {@link #pushItemWidth(float)})
+     */
+    public static void popItemWidth() {
+        cimgui_h.igPopItemWidth();
+    }
+
+    /**
+     * Set width of the _next_ common large "item+label" widget.
+     * >0.0f: width in pixels,
+     * <0.0f align xx pixels to the right of window (so -FLT_MIN always align width to the right side)
+     */
+    public static void setNextItemWidth(float itemWidth) {
+        cimgui_h.igSetNextItemWidth(itemWidth);
+    }
+
+    /**
+     * Width of item given pushed settings and current cursor position.
+     * NOT necessarily the width of last item unlike most 'Item' functions.
+     */
+    public static float calcItemWidth() {
+        return cimgui_h.igCalcItemWidth();
+    }
+
+    /**
+     * Push word-wrapping position for Text*() commands. Wrap to end of window (or column).
+     */
+    public static void pushTextWrapPos() {
+        pushTextWrapPos(0f);
+    }
+
+    /**
+     * Push word-wrapping position for Text*() commands.
+     * - < 0.0f: no wrapping;
+     * - 0.0f: wrap to end of window (or column);
+     * - > 0.0f: wrap at 'wrap_pos_x' position in window local space
+     */
+    public static void pushTextWrapPos(float wrapLocalPosX) {
+        cimgui_h.igPushTextWrapPos(wrapLocalPosX);
+    }
+
+    /**
+     * Pop the last text wrap position off the stack (pushed via {@link #pushTextWrapPos})
+     */
+    public static void popTextWrapPos() {
+        cimgui_h.igPopTextWrapPos();
+    }
     // endregion
 
     // =================================================================================================================
