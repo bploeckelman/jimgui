@@ -1139,7 +1139,7 @@ public final class ImGui {
     // endregion
 
     // =================================================================================================================
-    // region TODO: ID stack/scopes
+    // region ID stack/scopes
     // Read the FAQ (docs/FAQ.md or http://dearimgui.com/faq) for more details about how ID are handled in dear imgui.
     // - Those questions are answered and impacted by understanding of the ID stack system:
     //   - "Q: Why is my widget not reacting when I click on it?"
@@ -1152,15 +1152,62 @@ public final class ImGui {
     //   whereas "str_id" denote a string that is only used as an ID and not normally displayed.
     // =================================================================================================================
 
-//    IMGUI_API void          PushID(const char* str_id);                                     // push string into the ID stack (will hash string).
-//    IMGUI_API void          PushID(const char* str_id_begin, const char* str_id_end);       // push string into the ID stack (will hash string).
-//    IMGUI_API void          PushID(const void* ptr_id);                                     // push pointer into the ID stack (will hash pointer).
-//    IMGUI_API void          PushID(int int_id);                                             // push integer into the ID stack (will hash integer).
-//    IMGUI_API void          PopID();                                                        // pop from the ID stack.
-//    IMGUI_API ImGuiID       GetID(const char* str_id);                                      // calculate unique ID (hash of whole ID stack + given parameter). e.g. if you want to query into ImGuiStorage yourself
-//    IMGUI_API ImGuiID       GetID(const char* str_id_begin, const char* str_id_end);
-//    IMGUI_API ImGuiID       GetID(const void* ptr_id);
-//    IMGUI_API ImGuiID       GetID(int int_id);
+    /**
+     * Push string into the ID stack (will hash string).
+     */
+    public static void pushID(String strId) {
+        cimgui_h.igPushID_Str(frameArena().allocateFrom(strId));
+    }
+
+    /**
+     * Push pointer into the ID stack (will hash pointer).
+     * For java, this just uses the object identity hash so any java object can be a stable identifier.
+     * TODO: In the future we'll likely have java wrappers for specific native-side objects,
+     *  eg. ImDrawList, ImFont, ... and we'll add overloads for those wrappers.
+     */
+    public static void pushID(Object obj) {
+        int id = System.identityHashCode(obj);
+        cimgui_h.igPushID_Int(id);
+    }
+
+    /**
+     * Push integer into the ID stack (will hash integer).
+     */
+    public static void pushID(int id) {
+        cimgui_h.igPushID_Int(id);
+    }
+
+    /**
+     * Pop from the ID stack.
+     */
+    public static void popID() {
+        cimgui_h.igPopID();
+    }
+
+    /**
+     * Calculate unique ID (hash of whole ID stack + given parameter). e.g. if you want to query into ImGuiStorage yourself
+     */
+    public static int getID(String strId) {
+        return cimgui_h.igGetID_Str(frameArena().allocateFrom(strId));
+    }
+
+    /**
+     * Get the imgui id for the specified object.
+     * For java, this just uses the object identity hash so any java object can be a stable identifier.
+     * TODO: In the future we'll likely have java wrappers for specific native-side objects,
+     *  eg. ImDrawList, ImFont, ... and we'll add overloads for those wrappers.
+     */
+    public static int getID(Object obj) {
+        int id = System.identityHashCode(obj);
+        return getID(id);
+    }
+
+    /**
+     * Get the imgui id associated with the specified id.
+     */
+    public static int getID(int intId) {
+        return cimgui_h.igGetID_Int(intId);
+    }
     // endregion
 
     // =================================================================================================================
