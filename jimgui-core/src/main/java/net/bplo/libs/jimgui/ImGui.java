@@ -853,15 +853,61 @@ public final class ImGui {
     // endregion
 
     // =================================================================================================================
-    // region TODO: Style read access
+    // region Style read access
     // - Use the ShowStyleEditor() function to interactively see/edit the colors.
     // =================================================================================================================
 
-//    IMGUI_API ImVec2        GetFontTexUvWhitePixel();                                       // get UV coordinate for a white pixel, useful to draw custom shapes via the ImDrawList API
-//    IMGUI_API ImU32         GetColorU32(ImGuiCol idx, float alpha_mul = 1.0f);              // retrieve given style color with style alpha applied and optional extra alpha multiplier, packed as a 32-bit value suitable for ImDrawList
-//    IMGUI_API ImU32         GetColorU32(const ImVec4& col);                                 // retrieve given color with style alpha applied, packed as a 32-bit value suitable for ImDrawList
-//    IMGUI_API ImU32         GetColorU32(ImU32 col, float alpha_mul = 1.0f);                 // retrieve given color with style alpha applied, packed as a 32-bit value suitable for ImDrawList
-//    IMGUI_API const ImVec4& GetStyleColorVec4(ImGuiCol idx);                                // retrieve style color as stored in ImGuiStyle structure. use to feed back into PushStyleColor(), otherwise use GetColorU32() to get style color with style alpha baked in.
+    /**
+     * Get UV coordinate for a white pixel, useful to draw custom shapes via the ImDrawList API
+     */
+    public static Vec2f getFontTexUvWhitePixel() {
+        var result = cimgui_h.igGetFontTexUvWhitePixel(frameArena());
+        return new Vec2f(ImVec2_c.x(result), ImVec2_c.y(result));
+    }
+
+    /**
+     * Retrieve given style color with style alpha applied.
+     */
+    public static int getColorU32(int imGuiColIdx) {
+        return getColorU32(imGuiColIdx, 1f);
+    }
+
+    /**
+     * Retrieve given style color with style alpha applied and optional extra alpha multiplier, packed as a 32-bit value suitable for ImDrawList
+     */
+    public static int getColorU32(int imGuiColIdx, float alphaMul) {
+        return cimgui_h.igGetColorU32_Col(imGuiColIdx, alphaMul);
+    }
+
+    /**
+     * Retrieve given color with style alpha applied, packed as a 32-bit value suitable for ImDrawList
+     */
+    public static int getColorU32(float r, float g, float b, float a) {
+        return cimgui_h.igGetColorU32_Vec4(imVec4(r, g, b, a));
+    }
+
+    /**
+     * Retrieve given color with style alpha applied, packed as a 32-bit value suitable for ImDrawList
+     */
+    public static int getColorU32_Col(int col) {
+        return getColorU32_Col(col, 1f);
+    }
+
+    /**
+     * Retrieve given color with style alpha applied, packed as a 32-bit value suitable for ImDrawList
+     */
+    public static int getColorU32_Col(int col, float alphaMul) {
+        return cimgui_h.igGetColorU32_Col(col, alphaMul);
+    }
+
+    /**
+     * Retrieve style color as stored in ImGuiStyle structure.
+     * use to feed back into PushStyleColor(), otherwise use GetColorU32() to get style color with style alpha baked in.
+     */
+    public static Vec4f getStyleColorVec4(int imGuiColIdx) {
+        var result = cimgui_h.igGetStyleColorVec4(imGuiColIdx);
+        return new Vec4f(ImVec4_c.x(result), ImVec4_c.y(result), ImVec4_c.z(result), ImVec4_c.w(result));
+    }
     // endregion
 
     // =================================================================================================================
