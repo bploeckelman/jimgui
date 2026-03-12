@@ -699,19 +699,94 @@ public final class ImGui {
     // endregion
 
     // =================================================================================================================
-    // region TODO: Parameters stacks (shared)
+    // region Parameters stacks (shared)
     // =================================================================================================================
 
-//    IMGUI_API void          PushStyleColor(ImGuiCol idx, ImU32 col);                        // modify a style color. always use this if you modify the style after NewFrame().
-//    IMGUI_API void          PushStyleColor(ImGuiCol idx, const ImVec4& col);
-//    IMGUI_API void          PopStyleColor(int count = 1);
-//    IMGUI_API void          PushStyleVar(ImGuiStyleVar idx, float val);                     // modify a style float variable. always use this if you modify the style after NewFrame()!
-//    IMGUI_API void          PushStyleVar(ImGuiStyleVar idx, const ImVec2& val);             // modify a style ImVec2 variable. "
-//    IMGUI_API void          PushStyleVarX(ImGuiStyleVar idx, float val_x);                  // modify X component of a style ImVec2 variable. "
-//    IMGUI_API void          PushStyleVarY(ImGuiStyleVar idx, float val_y);                  // modify Y component of a style ImVec2 variable. "
-//    IMGUI_API void          PopStyleVar(int count = 1);
-//    IMGUI_API void          PushItemFlag(ImGuiItemFlags option, bool enabled);              // modify specified shared item flag, e.g. PushItemFlag(ImGuiItemFlags_NoTabStop, true)
-//    IMGUI_API void          PopItemFlag();
+    /**
+     * Modify a style color. always use this if you modify the style after NewFrame().
+     */
+    public static void pushStyleColor(int imGuiColIdx, int color) {
+        cimgui_h.igPushStyleColor_U32(imGuiColIdx, color);
+    }
+
+    /**
+     * Modify a style color. always use this if you modify the style after NewFrame().
+     */
+    public static void pushStyleColor(int imGuiColIdx, float r, float g, float b, float a) {
+        var color = imVec4(r, g, b, a);
+        cimgui_h.igPushStyleColor_Vec4(imGuiColIdx, color);
+    }
+
+    /**
+     * Pop one modified style color off the stack (pushed via {@link #pushStyleColor})
+     */
+    public static void popStyleColor() {
+        popStyleColor(1);
+    }
+
+    /**
+     * Pop {@code count} modified style colors off the stack (pushed via {@link #pushStyleColor})
+     */
+    public static void popStyleColor(int count) {
+        cimgui_h.igPopStyleColor(count);
+    }
+
+    /**
+     * Modify a style float variable. always use this if you modify the style after NewFrame()!
+     */
+    public static void pushStyleVar(int imGuiStyleVarIdx, float val) {
+        cimgui_h.igPushStyleVar_Float(imGuiStyleVarIdx, val);
+    }
+
+    /**
+     * Modify a style ImVec2 variable.
+     */
+    public static void pushStyleVar(int imGuiStyleVarIdx, float valX, float valY) {
+        var val = imVec2(valX, valY);
+        cimgui_h.igPushStyleVar_Vec2(imGuiStyleVarIdx, val);
+    }
+
+    /**
+     * Modify X component of a style ImVec2 variable.
+     */
+    public static void pushStyleVarX(int imGuiStyleVarIdx, float valX) {
+        cimgui_h.igPushStyleVarX(imGuiStyleVarIdx, valX);
+    }
+
+    /**
+     * Modify Y component of a style ImVec2 variable.
+     */
+    public static void pushStyleVarY(int imGuiStyleVarIdx, float valY) {
+        cimgui_h.igPushStyleVarY(imGuiStyleVarIdx, valY);
+    }
+
+    /**
+     * Pop the last style var off the stack (pushed via {@link #pushStyleVar})
+     */
+    public static void popStyleVar() {
+        popStyleVar(1);
+    }
+
+    /**
+     * Pop the last {@code count} style vars off the stack (pushed via {@link #pushStyleVar})
+     */
+    public static void popStyleVar(int count) {
+        cimgui_h.igPopStyleVar(count);
+    }
+
+    /**
+     * Modify specified shared item flag, e.g. PushItemFlag(ImGuiItemFlags_NoTabStop, true)
+     */
+    public static void pushItemFlag(int imGuiItemFlagsOption, boolean enabled) {
+        cimgui_h.igPushItemFlag(imGuiItemFlagsOption, enabled);
+    }
+
+    /**
+     * Pop the last item flag pushed by {@link #pushItemFlag} off the stack.
+     */
+    public static void popItemFlag() {
+        cimgui_h.igPopItemFlag();
+    }
     // endregion
 
     // =================================================================================================================
