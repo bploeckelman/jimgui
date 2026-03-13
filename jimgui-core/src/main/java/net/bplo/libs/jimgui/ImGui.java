@@ -60,6 +60,20 @@ public final class ImGui {
         public float get()       { return value[0]; }
         public void set(float v) { value[0] = v; }
     }
+
+    public record DoubleArg(double[] value) {
+        public DoubleArg()         { this(new double[] { 0 }); }
+        public DoubleArg(double v) { this(new double[] { v }); }
+        public double get()        { return value[0]; }
+        public void set(double v)  { value[0] = v; }
+    }
+
+    public record StringArg(String[] value) {
+        public StringArg()         { this(new String[] { "" }); }
+        public StringArg(String v) { this(new String[] { v }); }
+        public String get()        { return value[0]; }
+        public void set(String v)  { value[0] = v; }
+    }
     //endregion
 
     // =================================================================================================================
@@ -71,6 +85,9 @@ public final class ImGui {
     private static final cimgui_h.igTextWrapped TEXT_WRAPPED = cimgui_h.igTextWrapped.makeInvoker();
     private static final cimgui_h.igLabelText LABEL_TEXT = cimgui_h.igLabelText.makeInvoker();
     private static final cimgui_h.igBulletText BULLET_TEXT = cimgui_h.igBulletText.makeInvoker();
+    private static final cimgui_h.igSetTooltip SET_TOOLTIP = cimgui_h.igSetTooltip.makeInvoker();
+    private static final cimgui_h.igSetItemTooltip SET_ITEM_TOOLTIP = cimgui_h.igSetItemTooltip.makeInvoker();
+    private static final cimgui_h.igLogText LOG_TEXT = cimgui_h.igLogText.makeInvoker();
     //endregion
 
     // =================================================================================================================
@@ -1287,7 +1304,7 @@ public final class ImGui {
     // endregion
 
     // =================================================================================================================
-    // region TODO: Widgets: Main
+    // region Widgets: Main
     // - Most widgets return true when the value has been changed or when pressed/selected
     // - You may also use one of the many IsItemXXX functions (e.g. IsItemActive, IsItemHovered, etc.) to query widget state.
     // =================================================================================================================
@@ -1411,516 +1428,2259 @@ public final class ImGui {
     // endregion
 
     // =================================================================================================================
-    // region TODO: Widgets: Combo Box (Dropdown)
+    // region Widgets: Combo Box (Dropdown)
     // - The BeginCombo()/EndCombo() api allows you to manage your contents and selection state however you want it, by creating e.g. Selectable() items.
-    // - The old Combo() api are helpers over BeginCombo()/EndCombo() which are kept available for convenience purpose. This is analogous to how ListBox are created.
+    // - The old Combo() api are helpers over BeginCombo()/EndCombo() which are kept available for convenience purpose.
     // =================================================================================================================
 
-//    IMGUI_API bool          BeginCombo(const char* label, const char* preview_value, ImGuiComboFlags flags = 0);
-//    IMGUI_API void          EndCombo(); // only call EndCombo() if BeginCombo() returns true!
-//    IMGUI_API bool          Combo(const char* label, int* current_item, const char* const items[], int items_count, int popup_max_height_in_items = -1);
-//    IMGUI_API bool          Combo(const char* label, int* current_item, const char* items_separated_by_zeros, int popup_max_height_in_items = -1);      // Separate items with \0 within a string, end item-list with \0\0. e.g. "One\0Two\0Three\0"
-//    IMGUI_API bool          Combo(const char* label, int* current_item, const char* (*getter)(void* user_data, int idx), void* user_data, int items_count, int popup_max_height_in_items = -1);
+    /**
+     * Open a combo popup. Only call {@link #endCombo()} if this returns true.
+     */
+    public static boolean beginCombo(String label, String previewValue) {
+        return beginCombo(label, previewValue, 0);
+    }
+
+    /** Open a combo popup with flags. */
+    public static boolean beginCombo(String label, String previewValue, int flags) {
+        var arena = frameArena();
+        return cimgui_h.igBeginCombo(arena.allocateFrom(label), arena.allocateFrom(previewValue), flags);
+    }
+
+    /** Only call endCombo() if beginCombo() returned true. */
+    public static void endCombo() {
+        cimgui_h.igEndCombo();
+    }
+
+    /**
+     * Simple combo from a string array. Returns true when the selection changes.
+     * @param currentItem in/out index of the selected item
+     */
+    public static boolean combo(String label, IntArg currentItem, String[] items) {
+        return combo(label, currentItem, items, -1);
+    }
+
+    /**
+     * Simple combo from a string array — full control.
+     * @param popupMaxHeightInItems max visible items (-1 = default ~8)
+     */
+    public static boolean combo(String label, IntArg currentItem, String[] items, int popupMaxHeightInItems) {
+        var arena = frameArena();
+        var pCurrent = arena.allocate(cimgui_h.C_INT);
+        pCurrent.set(cimgui_h.C_INT, 0, currentItem.get());
+
+        var pItems = arena.allocate(cimgui_h.C_POINTER, items.length);
+        for (int i = 0; i < items.length; i++) {
+            pItems.setAtIndex(cimgui_h.C_POINTER, i, arena.allocateFrom(items[i]));
+        }
+
+        var changed = cimgui_h.igCombo_Str_arr(arena.allocateFrom(label), pCurrent, pItems, items.length, popupMaxHeightInItems);
+        currentItem.set(pCurrent.get(cimgui_h.C_INT, 0));
+        return changed;
+    }
     // endregion
 
     // =================================================================================================================
-    // region TODO: Widgets: Drag Sliders
-    // - Ctrl+Click on any drag box to turn them into an input box. Manually input values aren't clamped by default and can go off-bounds. Use ImGuiSliderFlags_AlwaysClamp to always clamp.
-    // - For all the Float2/Float3/Float4/Int2/Int3/Int4 versions of every function, note that a 'float v[X]' function argument is the same as 'float* v',
-    //   the array syntax is just a way to document the number of elements that are expected to be accessible. You can pass address of your first element out of a contiguous set, e.g. &myvector.x
-    // - Adjust format string to decorate the value with a prefix, a suffix, or adapt the editing and display precision e.g. "%.3f" -> 1.234; "%5.2f secs" -> 01.23 secs; "Biscuit: %.0f" -> Biscuit: 1; etc.
-    // - Format string may also be set to NULL or use the default format ("%f" or "%d").
-    // - Speed are per-pixel of mouse movement (v_speed=0.2f: mouse needs to move by 5 pixels to increase value by 1). For keyboard/gamepad navigation, minimum speed is Max(v_speed, minimum_step_at_given_precision).
-    // - Use v_min < v_max to clamp edits to given limits. Note that Ctrl+Click manual input can override those limits if ImGuiSliderFlags_AlwaysClamp is not used.
-    // - Use v_max = FLT_MAX / INT_MAX etc to avoid clamping to a maximum, same with v_min = -FLT_MAX / INT_MIN to avoid clamping to a minimum.
-    // - We use the same sets of flags for DragXXX() and SliderXXX() functions as the features are the same and it makes it easier to swap them.
-    // - Legacy: Pre-1.78 there are DragXXX() function signatures that take a final `float power=1.0f' argument instead of the `ImGuiSliderFlags flags=0' argument.
-    //   If you get a warning converting a float to ImGuiSliderFlags, read https://github.com/ocornut/imgui/issues/3361
+    // region Widgets: Drag Sliders
+    // - Ctrl+Click on any drag box to turn them into an input box.
+    // - v_speed=1.0f: mouse needs to move 1 pixel per unit. v_min >= v_max means no bounds.
+    // - For Float2/3/4 and Int2/3/4: FloatArg/IntArg.value[] must have sufficient length.
     // =================================================================================================================
 
-//    IMGUI_API bool          DragFloat(const char* label, float* v, float v_speed = 1.0f, float v_min = 0.0f, float v_max = 0.0f, const char* format = "%.3f", ImGuiSliderFlags flags = 0);     // If v_min >= v_max we have no bound
-//    IMGUI_API bool          DragFloat2(const char* label, float v[2], float v_speed = 1.0f, float v_min = 0.0f, float v_max = 0.0f, const char* format = "%.3f", ImGuiSliderFlags flags = 0);
-//    IMGUI_API bool          DragFloat3(const char* label, float v[3], float v_speed = 1.0f, float v_min = 0.0f, float v_max = 0.0f, const char* format = "%.3f", ImGuiSliderFlags flags = 0);
-//    IMGUI_API bool          DragFloat4(const char* label, float v[4], float v_speed = 1.0f, float v_min = 0.0f, float v_max = 0.0f, const char* format = "%.3f", ImGuiSliderFlags flags = 0);
-//    IMGUI_API bool          DragFloatRange2(const char* label, float* v_current_min, float* v_current_max, float v_speed = 1.0f, float v_min = 0.0f, float v_max = 0.0f, const char* format = "%.3f", const char* format_max = NULL, ImGuiSliderFlags flags = 0);
-//    IMGUI_API bool          DragInt(const char* label, int* v, float v_speed = 1.0f, int v_min = 0, int v_max = 0, const char* format = "%d", ImGuiSliderFlags flags = 0);  // If v_min >= v_max we have no bound
-//    IMGUI_API bool          DragInt2(const char* label, int v[2], float v_speed = 1.0f, int v_min = 0, int v_max = 0, const char* format = "%d", ImGuiSliderFlags flags = 0);
-//    IMGUI_API bool          DragInt3(const char* label, int v[3], float v_speed = 1.0f, int v_min = 0, int v_max = 0, const char* format = "%d", ImGuiSliderFlags flags = 0);
-//    IMGUI_API bool          DragInt4(const char* label, int v[4], float v_speed = 1.0f, int v_min = 0, int v_max = 0, const char* format = "%d", ImGuiSliderFlags flags = 0);
-//    IMGUI_API bool          DragIntRange2(const char* label, int* v_current_min, int* v_current_max, float v_speed = 1.0f, int v_min = 0, int v_max = 0, const char* format = "%d", const char* format_max = NULL, ImGuiSliderFlags flags = 0);
-//    IMGUI_API bool          DragScalar(const char* label, ImGuiDataType data_type, void* p_data, float v_speed = 1.0f, const void* p_min = NULL, const void* p_max = NULL, const char* format = NULL, ImGuiSliderFlags flags = 0);
-//    IMGUI_API bool          DragScalarN(const char* label, ImGuiDataType data_type, void* p_data, int components, float v_speed = 1.0f, const void* p_min = NULL, const void* p_max = NULL, const char* format = NULL, ImGuiSliderFlags flags = 0);
+    /** Drag float. Returns true when value changed. If v_min >= v_max there is no bound. */
+    public static boolean dragFloat(String label, FloatArg v) {
+        return dragFloat(label, v, 1f, 0f, 0f, "%.3f", 0);
+    }
+
+    /** Drag float with speed and range. */
+    public static boolean dragFloat(String label, FloatArg v, float speed, float min, float max) {
+        return dragFloat(label, v, speed, min, max, "%.3f", 0);
+    }
+
+    /**
+     * Drag float — full control.
+     * @param flags {@code ImGuiSliderFlags}
+     */
+    public static boolean dragFloat(String label, FloatArg v, float speed, float min, float max, String format, int flags) {
+        var arena = frameArena();
+        var pV = arena.allocate(cimgui_h.C_FLOAT);
+        pV.set(cimgui_h.C_FLOAT, 0, v.get());
+        var changed = cimgui_h.igDragFloat(arena.allocateFrom(label), pV, speed, min, max, arena.allocateFrom(format), flags);
+        v.set(pV.get(cimgui_h.C_FLOAT, 0));
+        return changed;
+    }
+
+    /** Drag 2-component float. {@code v.value} must have length >= 2. */
+    public static boolean dragFloat2(String label, FloatArg v) {
+        return dragFloat2(label, v, 1f, 0f, 0f, "%.3f", 0);
+    }
+
+    /** Drag 2-component float — full control. */
+    public static boolean dragFloat2(String label, FloatArg v, float speed, float min, float max, String format, int flags) {
+        var arena = frameArena();
+        var pV = arena.allocate(cimgui_h.C_FLOAT, 2);
+        pV.setAtIndex(cimgui_h.C_FLOAT, 0, v.value[0]);
+        pV.setAtIndex(cimgui_h.C_FLOAT, 1, v.value[1]);
+        var changed = cimgui_h.igDragFloat2(arena.allocateFrom(label), pV, speed, min, max, arena.allocateFrom(format), flags);
+        v.value[0] = pV.getAtIndex(cimgui_h.C_FLOAT, 0);
+        v.value[1] = pV.getAtIndex(cimgui_h.C_FLOAT, 1);
+        return changed;
+    }
+
+    /** Drag 3-component float. {@code v.value} must have length >= 3. */
+    public static boolean dragFloat3(String label, FloatArg v) {
+        return dragFloat3(label, v, 1f, 0f, 0f, "%.3f", 0);
+    }
+
+    /** Drag 3-component float — full control. */
+    public static boolean dragFloat3(String label, FloatArg v, float speed, float min, float max, String format, int flags) {
+        var arena = frameArena();
+        var pV = arena.allocate(cimgui_h.C_FLOAT, 3);
+        for (int i = 0; i < 3; i++) pV.setAtIndex(cimgui_h.C_FLOAT, i, v.value[i]);
+        var changed = cimgui_h.igDragFloat3(arena.allocateFrom(label), pV, speed, min, max, arena.allocateFrom(format), flags);
+        for (int i = 0; i < 3; i++) v.value[i] = pV.getAtIndex(cimgui_h.C_FLOAT, i);
+        return changed;
+    }
+
+    /** Drag 4-component float. {@code v.value} must have length >= 4. */
+    public static boolean dragFloat4(String label, FloatArg v) {
+        return dragFloat4(label, v, 1f, 0f, 0f, "%.3f", 0);
+    }
+
+    /** Drag 4-component float — full control. */
+    public static boolean dragFloat4(String label, FloatArg v, float speed, float min, float max, String format, int flags) {
+        var arena = frameArena();
+        var pV = arena.allocate(cimgui_h.C_FLOAT, 4);
+        for (int i = 0; i < 4; i++) pV.setAtIndex(cimgui_h.C_FLOAT, i, v.value[i]);
+        var changed = cimgui_h.igDragFloat4(arena.allocateFrom(label), pV, speed, min, max, arena.allocateFrom(format), flags);
+        for (int i = 0; i < 4; i++) v.value[i] = pV.getAtIndex(cimgui_h.C_FLOAT, i);
+        return changed;
+    }
+
+    /** Drag float range with separate min/max outputs. */
+    public static boolean dragFloatRange2(String label, FloatArg vCurrentMin, FloatArg vCurrentMax) {
+        return dragFloatRange2(label, vCurrentMin, vCurrentMax, 1f, 0f, 0f, "%.3f", null, 0);
+    }
+
+    /** Drag float range — full control. */
+    public static boolean dragFloatRange2(String label, FloatArg vCurrentMin, FloatArg vCurrentMax, float speed, float vMin, float vMax, String format, String formatMax, int flags) {
+        var arena = frameArena();
+        var pMin = arena.allocate(cimgui_h.C_FLOAT); pMin.set(cimgui_h.C_FLOAT, 0, vCurrentMin.get());
+        var pMax = arena.allocate(cimgui_h.C_FLOAT); pMax.set(cimgui_h.C_FLOAT, 0, vCurrentMax.get());
+        var pFmtMax = formatMax != null ? arena.allocateFrom(formatMax) : MemorySegment.NULL;
+        var changed = cimgui_h.igDragFloatRange2(arena.allocateFrom(label), pMin, pMax, speed, vMin, vMax, arena.allocateFrom(format), pFmtMax, flags);
+        vCurrentMin.set(pMin.get(cimgui_h.C_FLOAT, 0));
+        vCurrentMax.set(pMax.get(cimgui_h.C_FLOAT, 0));
+        return changed;
+    }
+
+    /** Drag int. If v_min >= v_max there is no bound. */
+    public static boolean dragInt(String label, IntArg v) {
+        return dragInt(label, v, 1f, 0, 0, "%d", 0);
+    }
+
+    /** Drag int with speed and range. */
+    public static boolean dragInt(String label, IntArg v, float speed, int min, int max) {
+        return dragInt(label, v, speed, min, max, "%d", 0);
+    }
+
+    /**
+     * Drag int — full control.
+     * @param flags {@code ImGuiSliderFlags}
+     */
+    public static boolean dragInt(String label, IntArg v, float speed, int min, int max, String format, int flags) {
+        var arena = frameArena();
+        var pV = arena.allocate(cimgui_h.C_INT);
+        pV.set(cimgui_h.C_INT, 0, v.get());
+        var changed = cimgui_h.igDragInt(arena.allocateFrom(label), pV, speed, min, max, arena.allocateFrom(format), flags);
+        v.set(pV.get(cimgui_h.C_INT, 0));
+        return changed;
+    }
+
+    /** Drag 2-component int. {@code v.value} must have length >= 2. */
+    public static boolean dragInt2(String label, IntArg v) {
+        return dragInt2(label, v, 1f, 0, 0, "%d", 0);
+    }
+
+    /** Drag 2-component int — full control. */
+    public static boolean dragInt2(String label, IntArg v, float speed, int min, int max, String format, int flags) {
+        var arena = frameArena();
+        var pV = arena.allocate(cimgui_h.C_INT, 2);
+        pV.setAtIndex(cimgui_h.C_INT, 0, v.value[0]);
+        pV.setAtIndex(cimgui_h.C_INT, 1, v.value[1]);
+        var changed = cimgui_h.igDragInt2(arena.allocateFrom(label), pV, speed, min, max, arena.allocateFrom(format), flags);
+        v.value[0] = pV.getAtIndex(cimgui_h.C_INT, 0);
+        v.value[1] = pV.getAtIndex(cimgui_h.C_INT, 1);
+        return changed;
+    }
+
+    /** Drag 3-component int. {@code v.value} must have length >= 3. */
+    public static boolean dragInt3(String label, IntArg v) {
+        return dragInt3(label, v, 1f, 0, 0, "%d", 0);
+    }
+
+    /** Drag 3-component int — full control. */
+    public static boolean dragInt3(String label, IntArg v, float speed, int min, int max, String format, int flags) {
+        var arena = frameArena();
+        var pV = arena.allocate(cimgui_h.C_INT, 3);
+        for (int i = 0; i < 3; i++) pV.setAtIndex(cimgui_h.C_INT, i, v.value[i]);
+        var changed = cimgui_h.igDragInt3(arena.allocateFrom(label), pV, speed, min, max, arena.allocateFrom(format), flags);
+        for (int i = 0; i < 3; i++) v.value[i] = pV.getAtIndex(cimgui_h.C_INT, i);
+        return changed;
+    }
+
+    /** Drag 4-component int. {@code v.value} must have length >= 4. */
+    public static boolean dragInt4(String label, IntArg v) {
+        return dragInt4(label, v, 1f, 0, 0, "%d", 0);
+    }
+
+    /** Drag 4-component int — full control. */
+    public static boolean dragInt4(String label, IntArg v, float speed, int min, int max, String format, int flags) {
+        var arena = frameArena();
+        var pV = arena.allocate(cimgui_h.C_INT, 4);
+        for (int i = 0; i < 4; i++) pV.setAtIndex(cimgui_h.C_INT, i, v.value[i]);
+        var changed = cimgui_h.igDragInt4(arena.allocateFrom(label), pV, speed, min, max, arena.allocateFrom(format), flags);
+        for (int i = 0; i < 4; i++) v.value[i] = pV.getAtIndex(cimgui_h.C_INT, i);
+        return changed;
+    }
+
+    /** Drag int range with separate min/max outputs. */
+    public static boolean dragIntRange2(String label, IntArg vCurrentMin, IntArg vCurrentMax) {
+        return dragIntRange2(label, vCurrentMin, vCurrentMax, 1f, 0, 0, "%d", null, 0);
+    }
+
+    /** Drag int range — full control. */
+    public static boolean dragIntRange2(String label, IntArg vCurrentMin, IntArg vCurrentMax, float speed, int vMin, int vMax, String format, String formatMax, int flags) {
+        var arena = frameArena();
+        var pMin = arena.allocate(cimgui_h.C_INT); pMin.set(cimgui_h.C_INT, 0, vCurrentMin.get());
+        var pMax = arena.allocate(cimgui_h.C_INT); pMax.set(cimgui_h.C_INT, 0, vCurrentMax.get());
+        var pFmtMax = formatMax != null ? arena.allocateFrom(formatMax) : MemorySegment.NULL;
+        var changed = cimgui_h.igDragIntRange2(arena.allocateFrom(label), pMin, pMax, speed, vMin, vMax, arena.allocateFrom(format), pFmtMax, flags);
+        vCurrentMin.set(pMin.get(cimgui_h.C_INT, 0));
+        vCurrentMax.set(pMax.get(cimgui_h.C_INT, 0));
+        return changed;
+    }
     // endregion
 
     // =================================================================================================================
-    // region TODO: Widgets: Regular Sliders
-    // - Ctrl+Click on any slider to turn them into an input box. Manually input values aren't clamped by default and can go off-bounds. Use ImGuiSliderFlags_AlwaysClamp to always clamp.
-    // - Adjust format string to decorate the value with a prefix, a suffix, or adapt the editing and display precision e.g. "%.3f" -> 1.234; "%5.2f secs" -> 01.23 secs; "Biscuit: %.0f" -> Biscuit: 1; etc.
-    // - Format string may also be set to NULL or use the default format ("%f" or "%d").
-    // - Legacy: Pre-1.78 there are SliderXXX() function signatures that take a final `float power=1.0f' argument instead of the `ImGuiSliderFlags flags=0' argument.
-    //   If you get a warning converting a float to ImGuiSliderFlags, read https://github.com/ocornut/imgui/issues/3361
+    // region Widgets: Regular Sliders
+    // - Ctrl+Click on any slider to turn it into an input box.
+    // - For Float2/3/4 and Int2/3/4: FloatArg/IntArg.value[] must have sufficient length.
     // =================================================================================================================
 
-//    IMGUI_API bool          SliderFloat(const char* label, float* v, float v_min, float v_max, const char* format = "%.3f", ImGuiSliderFlags flags = 0);     // adjust format to decorate the value with a prefix or a suffix for in-slider labels or unit display.
-//    IMGUI_API bool          SliderFloat2(const char* label, float v[2], float v_min, float v_max, const char* format = "%.3f", ImGuiSliderFlags flags = 0);
-//    IMGUI_API bool          SliderFloat3(const char* label, float v[3], float v_min, float v_max, const char* format = "%.3f", ImGuiSliderFlags flags = 0);
-//    IMGUI_API bool          SliderFloat4(const char* label, float v[4], float v_min, float v_max, const char* format = "%.3f", ImGuiSliderFlags flags = 0);
-//    IMGUI_API bool          SliderAngle(const char* label, float* v_rad, float v_degrees_min = -360.0f, float v_degrees_max = +360.0f, const char* format = "%.0f deg", ImGuiSliderFlags flags = 0);
-//    IMGUI_API bool          SliderInt(const char* label, int* v, int v_min, int v_max, const char* format = "%d", ImGuiSliderFlags flags = 0);
-//    IMGUI_API bool          SliderInt2(const char* label, int v[2], int v_min, int v_max, const char* format = "%d", ImGuiSliderFlags flags = 0);
-//    IMGUI_API bool          SliderInt3(const char* label, int v[3], int v_min, int v_max, const char* format = "%d", ImGuiSliderFlags flags = 0);
-//    IMGUI_API bool          SliderInt4(const char* label, int v[4], int v_min, int v_max, const char* format = "%d", ImGuiSliderFlags flags = 0);
-//    IMGUI_API bool          SliderScalar(const char* label, ImGuiDataType data_type, void* p_data, const void* p_min, const void* p_max, const char* format = NULL, ImGuiSliderFlags flags = 0);
-//    IMGUI_API bool          SliderScalarN(const char* label, ImGuiDataType data_type, void* p_data, int components, const void* p_min, const void* p_max, const char* format = NULL, ImGuiSliderFlags flags = 0);
-//    IMGUI_API bool          VSliderFloat(const char* label, const ImVec2& size, float* v, float v_min, float v_max, const char* format = "%.3f", ImGuiSliderFlags flags = 0);
-//    IMGUI_API bool          VSliderInt(const char* label, const ImVec2& size, int* v, int v_min, int v_max, const char* format = "%d", ImGuiSliderFlags flags = 0);
-//    IMGUI_API bool          VSliderScalar(const char* label, const ImVec2& size, ImGuiDataType data_type, void* p_data, const void* p_min, const void* p_max, const char* format = NULL, ImGuiSliderFlags flags = 0);
+    /** Float slider. */
+    public static boolean sliderFloat(String label, FloatArg v, float min, float max) {
+        return sliderFloat(label, v, min, max, "%.3f", 0);
+    }
+
+    /**
+     * Float slider — full control.
+     * @param flags {@code ImGuiSliderFlags}
+     */
+    public static boolean sliderFloat(String label, FloatArg v, float min, float max, String format, int flags) {
+        var arena = frameArena();
+        var pV = arena.allocate(cimgui_h.C_FLOAT);
+        pV.set(cimgui_h.C_FLOAT, 0, v.get());
+        var changed = cimgui_h.igSliderFloat(arena.allocateFrom(label), pV, min, max, arena.allocateFrom(format), flags);
+        v.set(pV.get(cimgui_h.C_FLOAT, 0));
+        return changed;
+    }
+
+    /** 2-component float slider. {@code v.value} must have length >= 2. */
+    public static boolean sliderFloat2(String label, FloatArg v, float min, float max) {
+        return sliderFloat2(label, v, min, max, "%.3f", 0);
+    }
+
+    /** 2-component float slider — full control. */
+    public static boolean sliderFloat2(String label, FloatArg v, float min, float max, String format, int flags) {
+        var arena = frameArena();
+        var pV = arena.allocate(cimgui_h.C_FLOAT, 2);
+        pV.setAtIndex(cimgui_h.C_FLOAT, 0, v.value[0]);
+        pV.setAtIndex(cimgui_h.C_FLOAT, 1, v.value[1]);
+        var changed = cimgui_h.igSliderFloat2(arena.allocateFrom(label), pV, min, max, arena.allocateFrom(format), flags);
+        v.value[0] = pV.getAtIndex(cimgui_h.C_FLOAT, 0);
+        v.value[1] = pV.getAtIndex(cimgui_h.C_FLOAT, 1);
+        return changed;
+    }
+
+    /** 3-component float slider. {@code v.value} must have length >= 3. */
+    public static boolean sliderFloat3(String label, FloatArg v, float min, float max) {
+        return sliderFloat3(label, v, min, max, "%.3f", 0);
+    }
+
+    /** 3-component float slider — full control. */
+    public static boolean sliderFloat3(String label, FloatArg v, float min, float max, String format, int flags) {
+        var arena = frameArena();
+        var pV = arena.allocate(cimgui_h.C_FLOAT, 3);
+        for (int i = 0; i < 3; i++) pV.setAtIndex(cimgui_h.C_FLOAT, i, v.value[i]);
+        var changed = cimgui_h.igSliderFloat3(arena.allocateFrom(label), pV, min, max, arena.allocateFrom(format), flags);
+        for (int i = 0; i < 3; i++) v.value[i] = pV.getAtIndex(cimgui_h.C_FLOAT, i);
+        return changed;
+    }
+
+    /** 4-component float slider. {@code v.value} must have length >= 4. */
+    public static boolean sliderFloat4(String label, FloatArg v, float min, float max) {
+        return sliderFloat4(label, v, min, max, "%.3f", 0);
+    }
+
+    /** 4-component float slider — full control. */
+    public static boolean sliderFloat4(String label, FloatArg v, float min, float max, String format, int flags) {
+        var arena = frameArena();
+        var pV = arena.allocate(cimgui_h.C_FLOAT, 4);
+        for (int i = 0; i < 4; i++) pV.setAtIndex(cimgui_h.C_FLOAT, i, v.value[i]);
+        var changed = cimgui_h.igSliderFloat4(arena.allocateFrom(label), pV, min, max, arena.allocateFrom(format), flags);
+        for (int i = 0; i < 4; i++) v.value[i] = pV.getAtIndex(cimgui_h.C_FLOAT, i);
+        return changed;
+    }
+
+    /** Angle slider. Input/output in radians, displayed in degrees. */
+    public static boolean sliderAngle(String label, FloatArg vRad) {
+        return sliderAngle(label, vRad, -360f, 360f, "%.0f deg", 0);
+    }
+
+    /** Angle slider — full control. */
+    public static boolean sliderAngle(String label, FloatArg vRad, float vDegreesMin, float vDegreesMax, String format, int flags) {
+        var arena = frameArena();
+        var pV = arena.allocate(cimgui_h.C_FLOAT);
+        pV.set(cimgui_h.C_FLOAT, 0, vRad.get());
+        var changed = cimgui_h.igSliderAngle(arena.allocateFrom(label), pV, vDegreesMin, vDegreesMax, arena.allocateFrom(format), flags);
+        vRad.set(pV.get(cimgui_h.C_FLOAT, 0));
+        return changed;
+    }
+
+    /** Int slider. */
+    public static boolean sliderInt(String label, IntArg v, int min, int max) {
+        return sliderInt(label, v, min, max, "%d", 0);
+    }
+
+    /**
+     * Int slider — full control.
+     * @param flags {@code ImGuiSliderFlags}
+     */
+    public static boolean sliderInt(String label, IntArg v, int min, int max, String format, int flags) {
+        var arena = frameArena();
+        var pV = arena.allocate(cimgui_h.C_INT);
+        pV.set(cimgui_h.C_INT, 0, v.get());
+        var changed = cimgui_h.igSliderInt(arena.allocateFrom(label), pV, min, max, arena.allocateFrom(format), flags);
+        v.set(pV.get(cimgui_h.C_INT, 0));
+        return changed;
+    }
+
+    /** 2-component int slider. {@code v.value} must have length >= 2. */
+    public static boolean sliderInt2(String label, IntArg v, int min, int max) {
+        return sliderInt2(label, v, min, max, "%d", 0);
+    }
+
+    /** 2-component int slider — full control. */
+    public static boolean sliderInt2(String label, IntArg v, int min, int max, String format, int flags) {
+        var arena = frameArena();
+        var pV = arena.allocate(cimgui_h.C_INT, 2);
+        pV.setAtIndex(cimgui_h.C_INT, 0, v.value[0]);
+        pV.setAtIndex(cimgui_h.C_INT, 1, v.value[1]);
+        var changed = cimgui_h.igSliderInt2(arena.allocateFrom(label), pV, min, max, arena.allocateFrom(format), flags);
+        v.value[0] = pV.getAtIndex(cimgui_h.C_INT, 0);
+        v.value[1] = pV.getAtIndex(cimgui_h.C_INT, 1);
+        return changed;
+    }
+
+    /** 3-component int slider. {@code v.value} must have length >= 3. */
+    public static boolean sliderInt3(String label, IntArg v, int min, int max) {
+        return sliderInt3(label, v, min, max, "%d", 0);
+    }
+
+    /** 3-component int slider — full control. */
+    public static boolean sliderInt3(String label, IntArg v, int min, int max, String format, int flags) {
+        var arena = frameArena();
+        var pV = arena.allocate(cimgui_h.C_INT, 3);
+        for (int i = 0; i < 3; i++) pV.setAtIndex(cimgui_h.C_INT, i, v.value[i]);
+        var changed = cimgui_h.igSliderInt3(arena.allocateFrom(label), pV, min, max, arena.allocateFrom(format), flags);
+        for (int i = 0; i < 3; i++) v.value[i] = pV.getAtIndex(cimgui_h.C_INT, i);
+        return changed;
+    }
+
+    /** 4-component int slider. {@code v.value} must have length >= 4. */
+    public static boolean sliderInt4(String label, IntArg v, int min, int max) {
+        return sliderInt4(label, v, min, max, "%d", 0);
+    }
+
+    /** 4-component int slider — full control. */
+    public static boolean sliderInt4(String label, IntArg v, int min, int max, String format, int flags) {
+        var arena = frameArena();
+        var pV = arena.allocate(cimgui_h.C_INT, 4);
+        for (int i = 0; i < 4; i++) pV.setAtIndex(cimgui_h.C_INT, i, v.value[i]);
+        var changed = cimgui_h.igSliderInt4(arena.allocateFrom(label), pV, min, max, arena.allocateFrom(format), flags);
+        for (int i = 0; i < 4; i++) v.value[i] = pV.getAtIndex(cimgui_h.C_INT, i);
+        return changed;
+    }
+
+    /** Vertical float slider. */
+    public static boolean vSliderFloat(String label, float width, float height, FloatArg v, float min, float max) {
+        return vSliderFloat(label, width, height, v, min, max, "%.3f", 0);
+    }
+
+    /** Vertical float slider — full control. */
+    public static boolean vSliderFloat(String label, float width, float height, FloatArg v, float min, float max, String format, int flags) {
+        var arena = frameArena();
+        var pV = arena.allocate(cimgui_h.C_FLOAT);
+        pV.set(cimgui_h.C_FLOAT, 0, v.get());
+        var changed = cimgui_h.igVSliderFloat(arena.allocateFrom(label), imVec2(width, height), pV, min, max, arena.allocateFrom(format), flags);
+        v.set(pV.get(cimgui_h.C_FLOAT, 0));
+        return changed;
+    }
+
+    /** Vertical int slider. */
+    public static boolean vSliderInt(String label, float width, float height, IntArg v, int min, int max) {
+        return vSliderInt(label, width, height, v, min, max, "%d", 0);
+    }
+
+    /** Vertical int slider — full control. */
+    public static boolean vSliderInt(String label, float width, float height, IntArg v, int min, int max, String format, int flags) {
+        var arena = frameArena();
+        var pV = arena.allocate(cimgui_h.C_INT);
+        pV.set(cimgui_h.C_INT, 0, v.get());
+        var changed = cimgui_h.igVSliderInt(arena.allocateFrom(label), imVec2(width, height), pV, min, max, arena.allocateFrom(format), flags);
+        v.set(pV.get(cimgui_h.C_INT, 0));
+        return changed;
+    }
     // endregion
 
-    // Widgets: Input with Keyboard
-    // - If you want to use InputText() with std::string or any custom dynamic string type, use the wrapper in misc/cpp/imgui_stdlib.h/.cpp!
-    // - Most of the ImGuiInputTextFlags flags are only useful for InputText() and not for InputFloatX, InputIntX, InputDouble etc.
-//    IMGUI_API bool          InputText(const char* label, char* buf, size_t buf_size, ImGuiInputTextFlags flags = 0, ImGuiInputTextCallback callback = NULL, void* user_data = NULL);
-//    IMGUI_API bool          InputTextMultiline(const char* label, char* buf, size_t buf_size, const ImVec2& size = ImVec2(0, 0), ImGuiInputTextFlags flags = 0, ImGuiInputTextCallback callback = NULL, void* user_data = NULL);
-//    IMGUI_API bool          InputTextWithHint(const char* label, const char* hint, char* buf, size_t buf_size, ImGuiInputTextFlags flags = 0, ImGuiInputTextCallback callback = NULL, void* user_data = NULL);
-//    IMGUI_API bool          InputFloat(const char* label, float* v, float step = 0.0f, float step_fast = 0.0f, const char* format = "%.3f", ImGuiInputTextFlags flags = 0);
-//    IMGUI_API bool          InputFloat2(const char* label, float v[2], const char* format = "%.3f", ImGuiInputTextFlags flags = 0);
-//    IMGUI_API bool          InputFloat3(const char* label, float v[3], const char* format = "%.3f", ImGuiInputTextFlags flags = 0);
-//    IMGUI_API bool          InputFloat4(const char* label, float v[4], const char* format = "%.3f", ImGuiInputTextFlags flags = 0);
-//    IMGUI_API bool          InputInt(const char* label, int* v, int step = 1, int step_fast = 100, ImGuiInputTextFlags flags = 0);
-//    IMGUI_API bool          InputInt2(const char* label, int v[2], ImGuiInputTextFlags flags = 0);
-//    IMGUI_API bool          InputInt3(const char* label, int v[3], ImGuiInputTextFlags flags = 0);
-//    IMGUI_API bool          InputInt4(const char* label, int v[4], ImGuiInputTextFlags flags = 0);
-//    IMGUI_API bool          InputDouble(const char* label, double* v, double step = 0.0, double step_fast = 0.0, const char* format = "%.6f", ImGuiInputTextFlags flags = 0);
-//    IMGUI_API bool          InputScalar(const char* label, ImGuiDataType data_type, void* p_data, const void* p_step = NULL, const void* p_step_fast = NULL, const char* format = NULL, ImGuiInputTextFlags flags = 0);
-//    IMGUI_API bool          InputScalarN(const char* label, ImGuiDataType data_type, void* p_data, int components, const void* p_step = NULL, const void* p_step_fast = NULL, const char* format = NULL, ImGuiInputTextFlags flags = 0);
+    // =================================================================================================================
+    // region Widgets: Input with Keyboard
+    // - StringArg is used for InputText to manage the mutable string buffer.
+    // - bufSize controls the maximum character capacity of the input field.
+    // =================================================================================================================
 
-    // Widgets: Color Editor/Picker (tip: the ColorEdit* functions have a little color square that can be left-clicked to open a picker, and right-clicked to open an option menu.)
-    // - Note that in C++ a 'float v[X]' function argument is the _same_ as 'float* v', the array syntax is just a way to document the number of elements that are expected to be accessible.
-    // - You can pass the address of a first float element out of a contiguous structure, e.g. &myvector.x
-//    IMGUI_API bool          ColorEdit3(const char* label, float col[3], ImGuiColorEditFlags flags = 0);
-//    IMGUI_API bool          ColorEdit4(const char* label, float col[4], ImGuiColorEditFlags flags = 0);
-//    IMGUI_API bool          ColorPicker3(const char* label, float col[3], ImGuiColorEditFlags flags = 0);
-//    IMGUI_API bool          ColorPicker4(const char* label, float col[4], ImGuiColorEditFlags flags = 0, const float* ref_col = NULL);
-//    IMGUI_API bool          ColorButton(const char* desc_id, const ImVec4& col, ImGuiColorEditFlags flags = 0, const ImVec2& size = ImVec2(0, 0)); // display a color square/button, hover for details, return true when pressed.
-//    IMGUI_API void          SetColorEditOptions(ImGuiColorEditFlags flags);                     // initialize current options (generally on application startup) if you want to select a default format, picker type, etc. User will be able to change many settings, unless you pass the _NoOptions flag to your calls.
+    /**
+     * Single-line text input.
+     * @param buf     in/out string value
+     * @param bufSize maximum number of characters the input field can hold
+     */
+    public static boolean inputText(String label, StringArg buf, int bufSize) {
+        return inputText(label, buf, bufSize, 0);
+    }
 
-    // Widgets: Trees
-    // - TreeNode functions return true when the node is open, in which case you need to also call TreePop() when you are finished displaying the tree node contents.
-//    IMGUI_API bool          TreeNode(const char* label);
-//    IMGUI_API bool          TreeNode(const char* str_id, const char* fmt, ...) IM_FMTARGS(2);   // helper variation to easily decorrelate the id from the displayed string. Read the FAQ about why and how to use ID. to align arbitrary text at the same level as a TreeNode() you can use Bullet().
-//    IMGUI_API bool          TreeNode(const void* ptr_id, const char* fmt, ...) IM_FMTARGS(2);   // "
-//    IMGUI_API bool          TreeNodeV(const char* str_id, const char* fmt, va_list args) IM_FMTLIST(2);
-//    IMGUI_API bool          TreeNodeV(const void* ptr_id, const char* fmt, va_list args) IM_FMTLIST(2);
-//    IMGUI_API bool          TreeNodeEx(const char* label, ImGuiTreeNodeFlags flags = 0);
-//    IMGUI_API bool          TreeNodeEx(const char* str_id, ImGuiTreeNodeFlags flags, const char* fmt, ...) IM_FMTARGS(3);
-//    IMGUI_API bool          TreeNodeEx(const void* ptr_id, ImGuiTreeNodeFlags flags, const char* fmt, ...) IM_FMTARGS(3);
-//    IMGUI_API bool          TreeNodeExV(const char* str_id, ImGuiTreeNodeFlags flags, const char* fmt, va_list args) IM_FMTLIST(3);
-//    IMGUI_API bool          TreeNodeExV(const void* ptr_id, ImGuiTreeNodeFlags flags, const char* fmt, va_list args) IM_FMTLIST(3);
-//    IMGUI_API void          TreePush(const char* str_id);                                       // ~ Indent()+PushID(). Already called by TreeNode() when returning true, but you can call TreePush/TreePop yourself if desired.
-//    IMGUI_API void          TreePush(const void* ptr_id);                                       // "
-//    IMGUI_API void          TreePop();                                                          // ~ Unindent()+PopID()
-//    IMGUI_API float         GetTreeNodeToLabelSpacing();                                        // horizontal distance preceding label when using TreeNode*() or Bullet() == (g.FontSize + style.FramePadding.x*2) for a regular unframed TreeNode
-//    IMGUI_API bool          CollapsingHeader(const char* label, ImGuiTreeNodeFlags flags = 0);  // if returning 'true' the header is open. doesn't indent nor push on ID stack. user doesn't have to call TreePop().
-//    IMGUI_API bool          CollapsingHeader(const char* label, bool* p_visible, ImGuiTreeNodeFlags flags = 0); // when 'p_visible != NULL': if '*p_visible==true' display an additional small close button on upper right of the header which will set the bool to false when clicked, if '*p_visible==false' don't display the header.
-//    IMGUI_API void          SetNextItemOpen(bool is_open, ImGuiCond cond = 0);                  // set next TreeNode/CollapsingHeader open state.
-//    IMGUI_API void          SetNextItemStorageID(ImGuiID storage_id);                           // set id to use for open/close storage (default to same as item id).
-//    IMGUI_API bool          TreeNodeGetOpen(ImGuiID storage_id);                                // retrieve tree node open/close state.
+    /**
+     * Single-line text input — full control.
+     * @param flags {@code ImGuiInputTextFlags}
+     */
+    public static boolean inputText(String label, StringArg buf, int bufSize, int flags) {
+        var arena = frameArena();
+        var nativeBuf = arena.allocate(cimgui_h.C_CHAR, bufSize);
+        var bytes = buf.get().getBytes();
+        int copyLen = Math.min(bytes.length, bufSize - 1);
+        for (int i = 0; i < copyLen; i++) nativeBuf.setAtIndex(cimgui_h.C_CHAR, i, bytes[i]);
+        nativeBuf.setAtIndex(cimgui_h.C_CHAR, copyLen, (byte) 0);
+        var changed = cimgui_h.igInputText(arena.allocateFrom(label), nativeBuf, bufSize, flags, MemorySegment.NULL, MemorySegment.NULL);
+        if (changed) buf.set(nativeBuf.getString(0));
+        return changed;
+    }
 
-    // Widgets: Selectables
-    // - A selectable highlights when hovered, and can display another color when selected.
-    // - Neighbors selectable extend their highlight bounds in order to leave no gap between them. This is so a series of selected Selectable appear contiguous.
-//    IMGUI_API bool          Selectable(const char* label, bool selected = false, ImGuiSelectableFlags flags = 0, const ImVec2& size = ImVec2(0, 0)); // "bool selected" carry the selection state (read-only). Selectable() is clicked is returns true so you can modify your selection state. size.x==0.0: use remaining width, size.x>0.0: specify width. size.y==0.0: use label height, size.y>0.0: specify height
-//    IMGUI_API bool          Selectable(const char* label, bool* p_selected, ImGuiSelectableFlags flags = 0, const ImVec2& size = ImVec2(0, 0));      // "bool* p_selected" point to the selection state (read-write), as a convenient helper.
+    /**
+     * Multi-line text input.
+     * @param buf     in/out string value
+     * @param bufSize maximum number of characters
+     */
+    public static boolean inputTextMultiline(String label, StringArg buf, int bufSize) {
+        return inputTextMultiline(label, buf, bufSize, 0f, 0f, 0);
+    }
 
-    // Multi-selection system for Selectable(), Checkbox(), TreeNode() functions [BETA]
-    // - This enables standard multi-selection/range-selection idioms (Ctrl+Mouse/Keyboard, Shift+Mouse/Keyboard, etc.) in a way that also allow a clipper to be used.
-    // - ImGuiSelectionUserData is often used to store your item index within the current view (but may store something else).
-    // - Read comments near ImGuiMultiSelectIO for instructions/details and see 'Demo->Widgets->Selection State & Multi-Select' for demo.
-    // - TreeNode() is technically supported but... using this correctly is more complicated. You need some sort of linear/random access to your tree,
-    //   which is suited to advanced trees setups already implementing filters and clipper. We will work simplifying the current demo.
-    // - 'selection_size' and 'items_count' parameters are optional and used by a few features. If they are costly for you to compute, you may avoid them.
-//    IMGUI_API ImGuiMultiSelectIO*   BeginMultiSelect(ImGuiMultiSelectFlags flags, int selection_size = -1, int items_count = -1);
-//    IMGUI_API ImGuiMultiSelectIO*   EndMultiSelect();
-//    IMGUI_API void                  SetNextItemSelectionUserData(ImGuiSelectionUserData selection_user_data);
-//    IMGUI_API bool                  IsItemToggledSelection();                                   // Was the last item selection state toggled? Useful if you need the per-item information _before_ reaching EndMultiSelect(). We only returns toggle _event_ in order to handle clipping correctly.
+    /**
+     * Multi-line text input — full control.
+     * @param flags {@code ImGuiInputTextFlags}
+     */
+    public static boolean inputTextMultiline(String label, StringArg buf, int bufSize, float width, float height, int flags) {
+        var arena = frameArena();
+        var nativeBuf = arena.allocate(cimgui_h.C_CHAR, bufSize);
+        var bytes = buf.get().getBytes();
+        int copyLen = Math.min(bytes.length, bufSize - 1);
+        for (int i = 0; i < copyLen; i++) nativeBuf.setAtIndex(cimgui_h.C_CHAR, i, bytes[i]);
+        nativeBuf.setAtIndex(cimgui_h.C_CHAR, copyLen, (byte) 0);
+        var changed = cimgui_h.igInputTextMultiline(arena.allocateFrom(label), nativeBuf, bufSize, imVec2(width, height), flags, MemorySegment.NULL, MemorySegment.NULL);
+        if (changed) buf.set(nativeBuf.getString(0));
+        return changed;
+    }
 
-    // Widgets: List Boxes
-    // - This is essentially a thin wrapper to using BeginChild/EndChild with the ImGuiChildFlags_FrameStyle flag for stylistic changes + displaying a label.
-    // - If you don't need a label you can probably simply use BeginChild() with the ImGuiChildFlags_FrameStyle flag for the same result.
-    // - You can submit contents and manage your selection state however you want it, by creating e.g. Selectable() or any other items.
-    // - The simplified/old ListBox() api are helpers over BeginListBox()/EndListBox() which are kept available for convenience purpose. This is analogous to how Combos are created.
-    // - Choose frame width:   size.x > 0.0f: custom  /  size.x < 0.0f or -FLT_MIN: right-align   /  size.x = 0.0f (default): use current ItemWidth
-    // - Choose frame height:  size.y > 0.0f: custom  /  size.y < 0.0f or -FLT_MIN: bottom-align  /  size.y = 0.0f (default): arbitrary default height which can fit ~7 items
-//    IMGUI_API bool          BeginListBox(const char* label, const ImVec2& size = ImVec2(0, 0)); // open a framed scrolling region
-//    IMGUI_API void          EndListBox();                                                       // only call EndListBox() if BeginListBox() returned true!
-//    IMGUI_API bool          ListBox(const char* label, int* current_item, const char* const items[], int items_count, int height_in_items = -1);
-//    IMGUI_API bool          ListBox(const char* label, int* current_item, const char* (*getter)(void* user_data, int idx), void* user_data, int items_count, int height_in_items = -1);
+    /**
+     * Single-line text input with hint shown when empty.
+     */
+    public static boolean inputTextWithHint(String label, String hint, StringArg buf, int bufSize) {
+        return inputTextWithHint(label, hint, buf, bufSize, 0);
+    }
 
-    // Widgets: Data Plotting
+    /**
+     * Single-line text input with hint — full control.
+     * @param flags {@code ImGuiInputTextFlags}
+     */
+    public static boolean inputTextWithHint(String label, String hint, StringArg buf, int bufSize, int flags) {
+        var arena = frameArena();
+        var nativeBuf = arena.allocate(cimgui_h.C_CHAR, bufSize);
+        var bytes = buf.get().getBytes();
+        int copyLen = Math.min(bytes.length, bufSize - 1);
+        for (int i = 0; i < copyLen; i++) nativeBuf.setAtIndex(cimgui_h.C_CHAR, i, bytes[i]);
+        nativeBuf.setAtIndex(cimgui_h.C_CHAR, copyLen, (byte) 0);
+        var changed = cimgui_h.igInputTextWithHint(arena.allocateFrom(label), arena.allocateFrom(hint), nativeBuf, bufSize, flags, MemorySegment.NULL, MemorySegment.NULL);
+        if (changed) buf.set(nativeBuf.getString(0));
+        return changed;
+    }
+
+    /** Float input field. */
+    public static boolean inputFloat(String label, FloatArg v) {
+        return inputFloat(label, v, 0f, 0f, "%.3f", 0);
+    }
+
+    /** Float input field — full control. @param flags {@code ImGuiInputTextFlags} */
+    public static boolean inputFloat(String label, FloatArg v, float step, float stepFast, String format, int flags) {
+        var arena = frameArena();
+        var pV = arena.allocate(cimgui_h.C_FLOAT);
+        pV.set(cimgui_h.C_FLOAT, 0, v.get());
+        var changed = cimgui_h.igInputFloat(arena.allocateFrom(label), pV, step, stepFast, arena.allocateFrom(format), flags);
+        v.set(pV.get(cimgui_h.C_FLOAT, 0));
+        return changed;
+    }
+
+    /** 2-component float input. {@code v.value} must have length >= 2. */
+    public static boolean inputFloat2(String label, FloatArg v) {
+        return inputFloat2(label, v, "%.3f", 0);
+    }
+
+    /** 2-component float input — full control. */
+    public static boolean inputFloat2(String label, FloatArg v, String format, int flags) {
+        var arena = frameArena();
+        var pV = arena.allocate(cimgui_h.C_FLOAT, 2);
+        pV.setAtIndex(cimgui_h.C_FLOAT, 0, v.value[0]);
+        pV.setAtIndex(cimgui_h.C_FLOAT, 1, v.value[1]);
+        var changed = cimgui_h.igInputFloat2(arena.allocateFrom(label), pV, arena.allocateFrom(format), flags);
+        v.value[0] = pV.getAtIndex(cimgui_h.C_FLOAT, 0);
+        v.value[1] = pV.getAtIndex(cimgui_h.C_FLOAT, 1);
+        return changed;
+    }
+
+    /** 3-component float input. {@code v.value} must have length >= 3. */
+    public static boolean inputFloat3(String label, FloatArg v) {
+        return inputFloat3(label, v, "%.3f", 0);
+    }
+
+    /** 3-component float input — full control. */
+    public static boolean inputFloat3(String label, FloatArg v, String format, int flags) {
+        var arena = frameArena();
+        var pV = arena.allocate(cimgui_h.C_FLOAT, 3);
+        for (int i = 0; i < 3; i++) pV.setAtIndex(cimgui_h.C_FLOAT, i, v.value[i]);
+        var changed = cimgui_h.igInputFloat3(arena.allocateFrom(label), pV, arena.allocateFrom(format), flags);
+        for (int i = 0; i < 3; i++) v.value[i] = pV.getAtIndex(cimgui_h.C_FLOAT, i);
+        return changed;
+    }
+
+    /** 4-component float input. {@code v.value} must have length >= 4. */
+    public static boolean inputFloat4(String label, FloatArg v) {
+        return inputFloat4(label, v, "%.3f", 0);
+    }
+
+    /** 4-component float input — full control. */
+    public static boolean inputFloat4(String label, FloatArg v, String format, int flags) {
+        var arena = frameArena();
+        var pV = arena.allocate(cimgui_h.C_FLOAT, 4);
+        for (int i = 0; i < 4; i++) pV.setAtIndex(cimgui_h.C_FLOAT, i, v.value[i]);
+        var changed = cimgui_h.igInputFloat4(arena.allocateFrom(label), pV, arena.allocateFrom(format), flags);
+        for (int i = 0; i < 4; i++) v.value[i] = pV.getAtIndex(cimgui_h.C_FLOAT, i);
+        return changed;
+    }
+
+    /** Int input field. */
+    public static boolean inputInt(String label, IntArg v) {
+        return inputInt(label, v, 1, 100, 0);
+    }
+
+    /** Int input field — full control. @param flags {@code ImGuiInputTextFlags} */
+    public static boolean inputInt(String label, IntArg v, int step, int stepFast, int flags) {
+        var arena = frameArena();
+        var pV = arena.allocate(cimgui_h.C_INT);
+        pV.set(cimgui_h.C_INT, 0, v.get());
+        var changed = cimgui_h.igInputInt(arena.allocateFrom(label), pV, step, stepFast, flags);
+        v.set(pV.get(cimgui_h.C_INT, 0));
+        return changed;
+    }
+
+    /** 2-component int input. {@code v.value} must have length >= 2. */
+    public static boolean inputInt2(String label, IntArg v) {
+        return inputInt2(label, v, 0);
+    }
+
+    /** 2-component int input — full control. @param flags {@code ImGuiInputTextFlags} */
+    public static boolean inputInt2(String label, IntArg v, int flags) {
+        var arena = frameArena();
+        var pV = arena.allocate(cimgui_h.C_INT, 2);
+        pV.setAtIndex(cimgui_h.C_INT, 0, v.value[0]);
+        pV.setAtIndex(cimgui_h.C_INT, 1, v.value[1]);
+        var changed = cimgui_h.igInputInt2(arena.allocateFrom(label), pV, flags);
+        v.value[0] = pV.getAtIndex(cimgui_h.C_INT, 0);
+        v.value[1] = pV.getAtIndex(cimgui_h.C_INT, 1);
+        return changed;
+    }
+
+    /** 3-component int input. {@code v.value} must have length >= 3. */
+    public static boolean inputInt3(String label, IntArg v) {
+        return inputInt3(label, v, 0);
+    }
+
+    /** 3-component int input — full control. @param flags {@code ImGuiInputTextFlags} */
+    public static boolean inputInt3(String label, IntArg v, int flags) {
+        var arena = frameArena();
+        var pV = arena.allocate(cimgui_h.C_INT, 3);
+        for (int i = 0; i < 3; i++) pV.setAtIndex(cimgui_h.C_INT, i, v.value[i]);
+        var changed = cimgui_h.igInputInt3(arena.allocateFrom(label), pV, flags);
+        for (int i = 0; i < 3; i++) v.value[i] = pV.getAtIndex(cimgui_h.C_INT, i);
+        return changed;
+    }
+
+    /** 4-component int input. {@code v.value} must have length >= 4. */
+    public static boolean inputInt4(String label, IntArg v) {
+        return inputInt4(label, v, 0);
+    }
+
+    /** 4-component int input — full control. @param flags {@code ImGuiInputTextFlags} */
+    public static boolean inputInt4(String label, IntArg v, int flags) {
+        var arena = frameArena();
+        var pV = arena.allocate(cimgui_h.C_INT, 4);
+        for (int i = 0; i < 4; i++) pV.setAtIndex(cimgui_h.C_INT, i, v.value[i]);
+        var changed = cimgui_h.igInputInt4(arena.allocateFrom(label), pV, flags);
+        for (int i = 0; i < 4; i++) v.value[i] = pV.getAtIndex(cimgui_h.C_INT, i);
+        return changed;
+    }
+
+    /** Double input field. */
+    public static boolean inputDouble(String label, DoubleArg v) {
+        return inputDouble(label, v, 0.0, 0.0, "%.6f", 0);
+    }
+
+    /** Double input field — full control. @param flags {@code ImGuiInputTextFlags} */
+    public static boolean inputDouble(String label, DoubleArg v, double step, double stepFast, String format, int flags) {
+        var arena = frameArena();
+        var pV = arena.allocate(cimgui_h.C_DOUBLE);
+        pV.set(cimgui_h.C_DOUBLE, 0, v.get());
+        var changed = cimgui_h.igInputDouble(arena.allocateFrom(label), pV, step, stepFast, arena.allocateFrom(format), flags);
+        v.set(pV.get(cimgui_h.C_DOUBLE, 0));
+        return changed;
+    }
+    // endregion
+
+    // =================================================================================================================
+    // region Widgets: Color Editor/Picker
+    // - col[3] / col[4]: FloatArg.value[] must have length >= 3 or 4 respectively.
+    // =================================================================================================================
+
+    /**
+     * RGB color editor. {@code col.value} must have length >= 3.
+     */
+    public static boolean colorEdit3(String label, FloatArg col) {
+        return colorEdit3(label, col, 0);
+    }
+
+    /** RGB color editor — full control. */
+    public static boolean colorEdit3(String label, FloatArg col, int flags) {
+        var arena = frameArena();
+        var pCol = arena.allocate(cimgui_h.C_FLOAT, 3);
+        for (int i = 0; i < 3; i++) pCol.setAtIndex(cimgui_h.C_FLOAT, i, col.value[i]);
+        var changed = cimgui_h.igColorEdit3(arena.allocateFrom(label), pCol, flags);
+        for (int i = 0; i < 3; i++) col.value[i] = pCol.getAtIndex(cimgui_h.C_FLOAT, i);
+        return changed;
+    }
+
+    /**
+     * RGBA color editor. {@code col.value} must have length >= 4.
+     */
+    public static boolean colorEdit4(String label, FloatArg col) {
+        return colorEdit4(label, col, 0);
+    }
+
+    /** RGBA color editor — full control. */
+    public static boolean colorEdit4(String label, FloatArg col, int flags) {
+        var arena = frameArena();
+        var pCol = arena.allocate(cimgui_h.C_FLOAT, 4);
+        for (int i = 0; i < 4; i++) pCol.setAtIndex(cimgui_h.C_FLOAT, i, col.value[i]);
+        var changed = cimgui_h.igColorEdit4(arena.allocateFrom(label), pCol, flags);
+        for (int i = 0; i < 4; i++) col.value[i] = pCol.getAtIndex(cimgui_h.C_FLOAT, i);
+        return changed;
+    }
+
+    /**
+     * RGB color picker. {@code col.value} must have length >= 3.
+     */
+    public static boolean colorPicker3(String label, FloatArg col) {
+        return colorPicker3(label, col, 0);
+    }
+
+    /** RGB color picker — full control. */
+    public static boolean colorPicker3(String label, FloatArg col, int flags) {
+        var arena = frameArena();
+        var pCol = arena.allocate(cimgui_h.C_FLOAT, 3);
+        for (int i = 0; i < 3; i++) pCol.setAtIndex(cimgui_h.C_FLOAT, i, col.value[i]);
+        var changed = cimgui_h.igColorPicker3(arena.allocateFrom(label), pCol, flags);
+        for (int i = 0; i < 3; i++) col.value[i] = pCol.getAtIndex(cimgui_h.C_FLOAT, i);
+        return changed;
+    }
+
+    /**
+     * RGBA color picker. {@code col.value} must have length >= 4.
+     */
+    public static boolean colorPicker4(String label, FloatArg col) {
+        return colorPicker4(label, col, 0);
+    }
+
+    /** RGBA color picker — full control. */
+    public static boolean colorPicker4(String label, FloatArg col, int flags) {
+        var arena = frameArena();
+        var pCol = arena.allocate(cimgui_h.C_FLOAT, 4);
+        for (int i = 0; i < 4; i++) pCol.setAtIndex(cimgui_h.C_FLOAT, i, col.value[i]);
+        var changed = cimgui_h.igColorPicker4(arena.allocateFrom(label), pCol, flags, MemorySegment.NULL);
+        for (int i = 0; i < 4; i++) col.value[i] = pCol.getAtIndex(cimgui_h.C_FLOAT, i);
+        return changed;
+    }
+
+    /**
+     * Display a color square/button. Returns true when pressed.
+     */
+    public static boolean colorButton(String descId, float r, float g, float b, float a) {
+        return colorButton(descId, r, g, b, a, 0, 0f, 0f);
+    }
+
+    /** Color button — full control. */
+    public static boolean colorButton(String descId, float r, float g, float b, float a, int flags, float sizeX, float sizeY) {
+        return cimgui_h.igColorButton(frameArena().allocateFrom(descId), imVec4(r, g, b, a), flags, imVec2(sizeX, sizeY));
+    }
+
+    /**
+     * Initialize color editor options (e.g. default format, picker type).
+     * @param flags {@code ImGuiColorEditFlags}
+     */
+    public static void setColorEditOptions(int flags) {
+        cimgui_h.igSetColorEditOptions(flags);
+    }
+    // endregion
+
+    // =================================================================================================================
+    // region Widgets: Trees
+    // - TreeNode functions return true when open; call treePop() when done displaying contents.
+    // =================================================================================================================
+
+    /**
+     * Tree node with label as both ID and display text. Returns true when open.
+     * Call {@link #treePop()} when done.
+     */
+    public static boolean treeNode(String label) {
+        return cimgui_h.igTreeNode_Str(frameArena().allocateFrom(label));
+    }
+
+    /**
+     * Tree node with flags.
+     * @param flags {@code ImGuiTreeNodeFlags}
+     */
+    public static boolean treeNodeEx(String label, int flags) {
+        return cimgui_h.igTreeNodeEx_Str(frameArena().allocateFrom(label), flags);
+    }
+
+    /**
+     * ~ Indent() + PushID(). Already called by treeNode() when it returns true.
+     * Call treePop() to match.
+     */
+    public static void treePush(String strId) {
+        cimgui_h.igTreePush_Str(frameArena().allocateFrom(strId));
+    }
+
+    /**
+     * Use Java object identity as tree push ID (analogous to the {@code void*} overload).
+     */
+    public static void treePush(Object obj) {
+        cimgui_h.igTreePush_Ptr(MemorySegment.ofAddress(System.identityHashCode(obj)));
+    }
+
+    /** ~ Unindent() + PopID(). */
+    public static void treePop() {
+        cimgui_h.igTreePop();
+    }
+
+    /** Horizontal distance preceding label when using TreeNode* or Bullet(). */
+    public static float getTreeNodeToLabelSpacing() {
+        return cimgui_h.igGetTreeNodeToLabelSpacing();
+    }
+
+    /**
+     * Collapsing section header. Returns true when open. Does not indent or push on ID stack.
+     */
+    public static boolean collapsingHeader(String label) {
+        return collapsingHeader(label, 0);
+    }
+
+    /** Collapsing header with flags. */
+    public static boolean collapsingHeader(String label, int flags) {
+        return cimgui_h.igCollapsingHeader_TreeNodeFlags(frameArena().allocateFrom(label), flags);
+    }
+
+    /**
+     * Collapsing header with a close button. When {@code visible} is false the header is hidden.
+     */
+    public static boolean collapsingHeader(String label, BoolArg visible) {
+        return collapsingHeader(label, visible, 0);
+    }
+
+    /** Collapsing header with close button and flags. */
+    public static boolean collapsingHeader(String label, BoolArg visible, int flags) {
+        var arena = frameArena();
+        var pVisible = arena.allocate(cimgui_h.C_BOOL);
+        pVisible.set(cimgui_h.C_BOOL, 0, visible.get());
+        var result = cimgui_h.igCollapsingHeader_BoolPtr(arena.allocateFrom(label), pVisible, flags);
+        visible.set(pVisible.get(cimgui_h.C_BOOL, 0));
+        return result;
+    }
+
+    /**
+     * Set the next TreeNode/CollapsingHeader open state.
+     */
+    public static void setNextItemOpen(boolean isOpen) {
+        setNextItemOpen(isOpen, 0);
+    }
+
+    /** Set next item open state with condition. */
+    public static void setNextItemOpen(boolean isOpen, int cond) {
+        cimgui_h.igSetNextItemOpen(isOpen, cond);
+    }
+
+    /** Set ID to use for open/close storage (default: same as item ID). */
+    public static void setNextItemStorageID(int storageId) {
+        cimgui_h.igSetNextItemStorageID(storageId);
+    }
+
+    /** Retrieve tree node open/close state by storage ID. */
+    public static boolean treeNodeGetOpen(int storageId) {
+        return cimgui_h.igTreeNodeGetOpen(storageId);
+    }
+    // endregion
+
+    // =================================================================================================================
+    // region Widgets: Selectables
+    // - A selectable highlights when hovered and can display another color when selected.
+    // =================================================================================================================
+
+    /** Selectable item. Returns true when clicked. */
+    public static boolean selectable(String label) {
+        return selectable(label, false, 0, 0f, 0f);
+    }
+
+    /** Selectable with read-only selection state. */
+    public static boolean selectable(String label, boolean selected) {
+        return selectable(label, selected, 0, 0f, 0f);
+    }
+
+    /**
+     * Selectable — full control.
+     * @param flags {@code ImGuiSelectableFlags}
+     * @param sizeX width (0 = use remaining width)
+     * @param sizeY height (0 = use label height)
+     */
+    public static boolean selectable(String label, boolean selected, int flags, float sizeX, float sizeY) {
+        return cimgui_h.igSelectable_Bool(frameArena().allocateFrom(label), selected, flags, imVec2(sizeX, sizeY));
+    }
+
+    /** Selectable with read-write selection state (auto-toggles). */
+    public static boolean selectable(String label, BoolArg selected) {
+        return selectable(label, selected, 0, 0f, 0f);
+    }
+
+    /** Selectable with read-write selection state — full control. */
+    public static boolean selectable(String label, BoolArg selected, int flags, float sizeX, float sizeY) {
+        var arena = frameArena();
+        var pSelected = arena.allocate(cimgui_h.C_BOOL);
+        pSelected.set(cimgui_h.C_BOOL, 0, selected.get());
+        var result = cimgui_h.igSelectable_BoolPtr(arena.allocateFrom(label), pSelected, flags, imVec2(sizeX, sizeY));
+        selected.set(pSelected.get(cimgui_h.C_BOOL, 0));
+        return result;
+    }
+    // endregion
+
+    // =================================================================================================================
+    // region TODO: Multi-selection (BeginMultiSelect / EndMultiSelect)
+    // =================================================================================================================
+    // endregion
+
+    // =================================================================================================================
+    // region Widgets: List Boxes
+    // =================================================================================================================
+
+    /**
+     * Open a framed scrolling list region. Call {@link #endListBox()} only if this returns true.
+     */
+    public static boolean beginListBox(String label) {
+        return beginListBox(label, 0f, 0f);
+    }
+
+    /** Open a framed scrolling list region with explicit size. */
+    public static boolean beginListBox(String label, float width, float height) {
+        return cimgui_h.igBeginListBox(frameArena().allocateFrom(label), imVec2(width, height));
+    }
+
+    /** Only call endListBox() if beginListBox() returned true. */
+    public static void endListBox() {
+        cimgui_h.igEndListBox();
+    }
+
+    /**
+     * Simple list box from a string array.
+     * @param currentItem in/out index of current selection
+     */
+    public static boolean listBox(String label, IntArg currentItem, String[] items) {
+        return listBox(label, currentItem, items, -1);
+    }
+
+    /**
+     * Simple list box from a string array.
+     * @param heightInItems visible item count (-1 = default ~7)
+     */
+    public static boolean listBox(String label, IntArg currentItem, String[] items, int heightInItems) {
+        var arena = frameArena();
+        var pCurrent = arena.allocate(cimgui_h.C_INT);
+        pCurrent.set(cimgui_h.C_INT, 0, currentItem.get());
+        var pItems = arena.allocate(cimgui_h.C_POINTER, items.length);
+        for (int i = 0; i < items.length; i++) pItems.setAtIndex(cimgui_h.C_POINTER, i, arena.allocateFrom(items[i]));
+        var changed = cimgui_h.igListBox_Str_arr(arena.allocateFrom(label), pCurrent, pItems, items.length, heightInItems);
+        currentItem.set(pCurrent.get(cimgui_h.C_INT, 0));
+        return changed;
+    }
+    // endregion
+
+    // =================================================================================================================
+    // region TODO: Widgets: Data Plotting
     // - Consider using ImPlot (https://github.com/epezent/implot) which is much better!
-//    IMGUI_API void          PlotLines(const char* label, const float* values, int values_count, int values_offset = 0, const char* overlay_text = NULL, float scale_min = FLT_MAX, float scale_max = FLT_MAX, ImVec2 graph_size = ImVec2(0, 0), int stride = sizeof(float));
-//    IMGUI_API void          PlotLines(const char* label, float(*values_getter)(void* data, int idx), void* data, int values_count, int values_offset = 0, const char* overlay_text = NULL, float scale_min = FLT_MAX, float scale_max = FLT_MAX, ImVec2 graph_size = ImVec2(0, 0));
-//    IMGUI_API void          PlotHistogram(const char* label, const float* values, int values_count, int values_offset = 0, const char* overlay_text = NULL, float scale_min = FLT_MAX, float scale_max = FLT_MAX, ImVec2 graph_size = ImVec2(0, 0), int stride = sizeof(float));
-//    IMGUI_API void          PlotHistogram(const char* label, float (*values_getter)(void* data, int idx), void* data, int values_count, int values_offset = 0, const char* overlay_text = NULL, float scale_min = FLT_MAX, float scale_max = FLT_MAX, ImVec2 graph_size = ImVec2(0, 0));
+    // =================================================================================================================
+    // endregion
 
-    // Widgets: Value() Helpers.
-    // - Those are merely shortcut to calling Text() with a format string. Output single value in "name: value" format (tip: freely declare more in your code to handle your types. you can add functions to the ImGui namespace)
-//    IMGUI_API void          Value(const char* prefix, bool b);
-//    IMGUI_API void          Value(const char* prefix, int v);
-//    IMGUI_API void          Value(const char* prefix, unsigned int v);
-//    IMGUI_API void          Value(const char* prefix, float v, const char* float_format = NULL);
+    // =================================================================================================================
+    // region Widgets: Value Helpers
+    // - Shortcut for calling text() with a "name: value" format string.
+    // =================================================================================================================
 
-    // Widgets: Menus
-    // - Use BeginMenuBar() on a window ImGuiWindowFlags_MenuBar to append to its menu bar.
-    // - Use BeginMainMenuBar() to create a menu bar at the top of the screen and append to it.
-    // - Use BeginMenu() to create a menu. You can call BeginMenu() multiple time with the same identifier to append more items to it.
-    // - Not that MenuItem() keyboardshortcuts are displayed as a convenience but _not processed_ by Dear ImGui at the moment.
-//    IMGUI_API bool          BeginMenuBar();                                                     // append to menu-bar of current window (requires ImGuiWindowFlags_MenuBar flag set on parent window).
-//    IMGUI_API void          EndMenuBar();                                                       // only call EndMenuBar() if BeginMenuBar() returns true!
-//    IMGUI_API bool          BeginMainMenuBar();                                                 // create and append to a full screen menu-bar.
-//    IMGUI_API void          EndMainMenuBar();                                                   // only call EndMainMenuBar() if BeginMainMenuBar() returns true!
-//    IMGUI_API bool          BeginMenu(const char* label, bool enabled = true);                  // create a sub-menu entry. only call EndMenu() if this returns true!
-//    IMGUI_API void          EndMenu();                                                          // only call EndMenu() if BeginMenu() returns true!
-//    IMGUI_API bool          MenuItem(const char* label, const char* shortcut = NULL, bool selected = false, bool enabled = true);  // return true when activated.
-//    IMGUI_API bool          MenuItem(const char* label, const char* shortcut, bool* p_selected, bool enabled = true);              // return true when activated + toggle (*p_selected) if p_selected != NULL
+    /** Display "prefix: true/false". */
+    public static void value(String prefix, boolean b) {
+        cimgui_h.igValue_Bool(frameArena().allocateFrom(prefix), b);
+    }
 
-    // Tooltips
-    // - Tooltips are windows following the mouse. They do not take focus away.
-    // - A tooltip window can contain items of any types.
-    // - SetTooltip() is more or less a shortcut for the 'if (BeginTooltip()) { Text(...); EndTooltip(); }' idiom (with a subtlety that it discard any previously submitted tooltip)
-//    IMGUI_API bool          BeginTooltip();                                                     // begin/append a tooltip window.
-//    IMGUI_API void          EndTooltip();                                                       // only call EndTooltip() if BeginTooltip()/BeginItemTooltip() returns true!
-//    IMGUI_API void          SetTooltip(const char* fmt, ...) IM_FMTARGS(1);                     // set a text-only tooltip. Often used after a ImGui::IsItemHovered() check. Override any previous call to SetTooltip().
-//    IMGUI_API void          SetTooltipV(const char* fmt, va_list args) IM_FMTLIST(1);
+    /** Display "prefix: value". */
+    public static void value(String prefix, int v) {
+        cimgui_h.igValue_Int(frameArena().allocateFrom(prefix), v);
+    }
 
-    // Tooltips: helpers for showing a tooltip when hovering an item
-    // - BeginItemTooltip() is a shortcut for the 'if (IsItemHovered(ImGuiHoveredFlags_ForTooltip) && BeginTooltip())' idiom.
-    // - SetItemTooltip() is a shortcut for the 'if (IsItemHovered(ImGuiHoveredFlags_ForTooltip)) { SetTooltip(...); }' idiom.
-    // - Where 'ImGuiHoveredFlags_ForTooltip' itself is a shortcut to use 'style.HoverFlagsForTooltipMouse' or 'style.HoverFlagsForTooltipNav' depending on active input type. For mouse it defaults to 'ImGuiHoveredFlags_Stationary | ImGuiHoveredFlags_DelayShort'.
-//    IMGUI_API bool          BeginItemTooltip();                                                 // begin/append a tooltip window if preceding item was hovered.
-//    IMGUI_API void          SetItemTooltip(const char* fmt, ...) IM_FMTARGS(1);                 // set a text-only tooltip if preceding item was hovered. override any previous call to SetTooltip().
-//    IMGUI_API void          SetItemTooltipV(const char* fmt, va_list args) IM_FMTLIST(1);
+    /** Display "prefix: value" for unsigned int. */
+    public static void valueUnsigned(String prefix, int v) {
+        cimgui_h.igValue_Uint(frameArena().allocateFrom(prefix), v);
+    }
 
-    // Popups, Modals
-    //  - They block normal mouse hovering detection (and therefore most mouse interactions) behind them.
-    //  - If not modal: they can be closed by clicking anywhere outside them, or by pressing ESCAPE.
-    //  - Their visibility state (~bool) is held internally instead of being held by the programmer as we are used to with regular Begin*() calls.
-    //  - The 3 properties above are related: we need to retain popup visibility state in the library because popups may be closed as any time.
-    //  - You can bypass the hovering restriction by using ImGuiHoveredFlags_AllowWhenBlockedByPopup when calling IsItemHovered() or IsWindowHovered().
-    //  - IMPORTANT: Popup identifiers are relative to the current ID stack, so OpenPopup and BeginPopup generally needs to be at the same level of the stack.
-    //    This is sometimes leading to confusing mistakes. May rework this in the future.
-    //  - BeginPopup(): query popup state, if open start appending into the window. Call EndPopup() afterwards if returned true. ImGuiWindowFlags are forwarded to the window.
-    //  - BeginPopupModal(): block every interaction behind the window, cannot be closed by user, add a dimming background, has a title bar.
-//    IMGUI_API bool          BeginPopup(const char* str_id, ImGuiWindowFlags flags = 0);                         // return true if the popup is open, and you can start outputting to it.
-//    IMGUI_API bool          BeginPopupModal(const char* name, bool* p_open = NULL, ImGuiWindowFlags flags = 0); // return true if the modal is open, and you can start outputting to it.
-//    IMGUI_API void          EndPopup();                                                                         // only call EndPopup() if BeginPopupXXX() returns true!
+    /** Display "prefix: value". */
+    public static void value(String prefix, float v) {
+        value(prefix, v, null);
+    }
 
-    // Popups: open/close functions
-    //  - OpenPopup(): set popup state to open. ImGuiPopupFlags are available for opening options.
-    //  - If not modal: they can be closed by clicking anywhere outside them, or by pressing ESCAPE.
-    //  - CloseCurrentPopup(): use inside the BeginPopup()/EndPopup() scope to close manually.
-    //  - CloseCurrentPopup() is called by default by Selectable()/MenuItem() when activated (FIXME: need some options).
-    //  - Use ImGuiPopupFlags_NoOpenOverExistingPopup to avoid opening a popup if there's already one at the same level. This is equivalent to e.g. testing for !IsAnyPopupOpen() prior to OpenPopup().
-    //  - Use IsWindowAppearing() after BeginPopup() to tell if a window just opened.
-//    IMGUI_API void          OpenPopup(const char* str_id, ImGuiPopupFlags popup_flags = 0);                     // call to mark popup as open (don't call every frame!).
-//    IMGUI_API void          OpenPopup(ImGuiID id, ImGuiPopupFlags popup_flags = 0);                             // id overload to facilitate calling from nested stacks
-//    IMGUI_API void          OpenPopupOnItemClick(const char* str_id = NULL, ImGuiPopupFlags popup_flags = 0);   // helper to open popup when clicked on last item. Default to ImGuiPopupFlags_MouseButtonRight == 1. (note: actually triggers on the mouse _released_ event to be consistent with popup behaviors)
-//    IMGUI_API void          CloseCurrentPopup();                                                                // manually close the popup we have begin-ed into.
+    /** Display "prefix: value" with optional printf format string. */
+    public static void value(String prefix, float v, String floatFormat) {
+        var pFmt = floatFormat != null ? frameArena().allocateFrom(floatFormat) : MemorySegment.NULL;
+        cimgui_h.igValue_Float(frameArena().allocateFrom(prefix), v, pFmt);
+    }
+    // endregion
 
-    // Popups: Open+Begin popup combined functions helpers to create context menus.
-    //  - Helpers to do OpenPopup+BeginPopup where the Open action is triggered by e.g. hovering an item and right-clicking.
-    //  - IMPORTANT: Notice that BeginPopupContextXXX takes ImGuiPopupFlags just like OpenPopup() and unlike BeginPopup(). For full consistency, we may add ImGuiWindowFlags to the BeginPopupContextXXX functions in the future.
-    //  - IMPORTANT: If you ever used the left mouse button with BeginPopupContextXXX() helpers before 1.92.6:
-    //    - Before this version, OpenPopupOnItemClick(), BeginPopupContextItem(), BeginPopupContextWindow(), BeginPopupContextVoid() had 'a ImGuiPopupFlags popup_flags = 1' default value in their function signature.
-    //    - Before: Explicitly passing a literal 0 meant ImGuiPopupFlags_MouseButtonLeft. The default = 1 meant ImGuiPopupFlags_MouseButtonRight.
-    //    - After: The default = 0 means ImGuiPopupFlags_MouseButtonRight. Explicitly passing a literal 1 also means ImGuiPopupFlags_MouseButtonRight (if legacy behavior are enabled) or will assert (if legacy behavior are disabled).
-    //    - TL;DR: if you don't want to use right mouse button for popups, always specify it explicitly using a named ImGuiPopupFlags_MouseButtonXXXX value.
-    //    - Read "API BREAKING CHANGES" 2026/01/07 (1.92.6) entry in imgui.cpp or GitHub topic #9157 for all details.
-//    IMGUI_API bool          BeginPopupContextItem(const char* str_id = NULL, ImGuiPopupFlags popup_flags = 0);  // open+begin popup when clicked on last item. Use str_id==NULL to associate the popup to previous item. If you want to use that on a non-interactive item such as Text() you need to pass in an explicit ID here. read comments in .cpp!
-//    IMGUI_API bool          BeginPopupContextWindow(const char* str_id = NULL, ImGuiPopupFlags popup_flags = 0);// open+begin popup when clicked on current window.
-//    IMGUI_API bool          BeginPopupContextVoid(const char* str_id = NULL, ImGuiPopupFlags popup_flags = 0);  // open+begin popup when clicked in void (where there are no windows).
+    // =================================================================================================================
+    // region Widgets: Menus
+    // - Use beginMenuBar() on a window with ImGuiWindowFlags_MenuBar to append to its menu bar.
+    // - Use beginMainMenuBar() to create a full-screen menu bar at the top.
+    // =================================================================================================================
 
-    // Popups: query functions
-    //  - IsPopupOpen(): return true if the popup is open at the current BeginPopup() level of the popup stack.
-    //  - IsPopupOpen() with ImGuiPopupFlags_AnyPopupId: return true if any popup is open at the current BeginPopup() level of the popup stack.
-    //  - IsPopupOpen() with ImGuiPopupFlags_AnyPopupId + ImGuiPopupFlags_AnyPopupLevel: return true if any popup is open.
-//    IMGUI_API bool          IsPopupOpen(const char* str_id, ImGuiPopupFlags flags = 0);                         // return true if the popup is open.
+    /**
+     * Append to the menu bar of the current window.
+     * Requires {@code ImGuiWindowFlags_MenuBar} on the parent window.
+     * Only call {@link #endMenuBar()} if this returns true.
+     */
+    public static boolean beginMenuBar() {
+        return cimgui_h.igBeginMenuBar();
+    }
 
-    // Tables
-    // - Full-featured replacement for old Columns API.
-    // - See Demo->Tables for demo code. See top of imgui_tables.cpp for general commentary.
-    // - See ImGuiTableFlags_ and ImGuiTableColumnFlags_ enums for a description of available flags.
-    // The typical call flow is:
-    // - 1. Call BeginTable(), early out if returning false.
-    // - 2. Optionally call TableSetupColumn() to submit column name/flags/defaults.
-    // - 3. Optionally call TableSetupScrollFreeze() to request scroll freezing of columns/rows.
-    // - 4. Optionally call TableHeadersRow() to submit a header row. Names are pulled from TableSetupColumn() data.
-    // - 5. Populate contents:
-    //    - In most situations you can use TableNextRow() + TableSetColumnIndex(N) to start appending into a column.
-    //    - If you are using tables as a sort of grid, where every column is holding the same type of contents,
-    //      you may prefer using TableNextColumn() instead of TableNextRow() + TableSetColumnIndex().
-    //      TableNextColumn() will automatically wrap-around into the next row if needed.
-    //    - IMPORTANT: Comparatively to the old Columns() API, we need to call TableNextColumn() for the first column!
-    //    - Summary of possible call flow:
-    //        - TableNextRow() -> TableSetColumnIndex(0) -> Text("Hello 0") -> TableSetColumnIndex(1) -> Text("Hello 1")  // OK
-    //        - TableNextRow() -> TableNextColumn()      -> Text("Hello 0") -> TableNextColumn()      -> Text("Hello 1")  // OK
-    //        -                   TableNextColumn()      -> Text("Hello 0") -> TableNextColumn()      -> Text("Hello 1")  // OK: TableNextColumn() automatically gets to next row!
-    //        - TableNextRow()                           -> Text("Hello 0")                                               // Not OK! Missing TableSetColumnIndex() or TableNextColumn()! Text will not appear!
-    // - 5. Call EndTable()
-//    IMGUI_API bool          BeginTable(const char* str_id, int columns, ImGuiTableFlags flags = 0, const ImVec2& outer_size = ImVec2(0.0f, 0.0f), float inner_width = 0.0f);
-//    IMGUI_API void          EndTable();                                         // only call EndTable() if BeginTable() returns true!
-//    IMGUI_API void          TableNextRow(ImGuiTableRowFlags row_flags = 0, float min_row_height = 0.0f); // append into the first cell of a new row. 'min_row_height' include the minimum top and bottom padding aka CellPadding.y * 2.0f.
-//    IMGUI_API bool          TableNextColumn();                                  // append into the next column (or first column of next row if currently in last column). Return true when column is visible.
-//    IMGUI_API bool          TableSetColumnIndex(int column_n);                  // append into the specified column. Return true when column is visible.
+    /** Only call endMenuBar() if beginMenuBar() returned true. */
+    public static void endMenuBar() {
+        cimgui_h.igEndMenuBar();
+    }
 
-    // Tables: Headers & Columns declaration
-    // - Use TableSetupColumn() to specify label, resizing policy, default width/weight, id, various other flags etc.
-    // - Use TableHeadersRow() to create a header row and automatically submit a TableHeader() for each column.
-    //   Headers are required to perform: reordering, sorting, and opening the context menu.
-    //   The context menu can also be made available in columns body using ImGuiTableFlags_ContextMenuInBody.
-    // - You may manually submit headers using TableNextRow() + TableHeader() calls, but this is only useful in
-    //   some advanced use cases (e.g. adding custom widgets in header row).
-    // - Use TableSetupScrollFreeze() to lock columns/rows so they stay visible when scrolled.
-//    IMGUI_API void          TableSetupColumn(const char* label, ImGuiTableColumnFlags flags = 0, float init_width_or_weight = 0.0f, ImGuiID user_id = 0);
-//    IMGUI_API void          TableSetupScrollFreeze(int cols, int rows);         // lock columns/rows so they stay visible when scrolled.
-//    IMGUI_API void          TableHeader(const char* label);                     // submit one header cell manually (rarely used)
-//    IMGUI_API void          TableHeadersRow();                                  // submit a row with headers cells based on data provided to TableSetupColumn() + submit context menu
-//    IMGUI_API void          TableAngledHeadersRow();                            // submit a row with angled headers for every column with the ImGuiTableColumnFlags_AngledHeader flag. MUST BE FIRST ROW.
+    /**
+     * Create and append to a full-screen menu bar at the top of the screen.
+     * Only call {@link #endMainMenuBar()} if this returns true.
+     */
+    public static boolean beginMainMenuBar() {
+        return cimgui_h.igBeginMainMenuBar();
+    }
 
-    // Tables: Sorting & Miscellaneous functions
-    // - Sorting: call TableGetSortSpecs() to retrieve latest sort specs for the table. NULL when not sorting.
-    //   When 'sort_specs->SpecsDirty == true' you should sort your data. It will be true when sorting specs have
-    //   changed since last call, or the first time. Make sure to set 'SpecsDirty = false' after sorting,
-    //   else you may wastefully sort your data every frame!
-    // - Functions args 'int column_n' treat the default value of -1 as the same as passing the current column index.
-//    IMGUI_API ImGuiTableSortSpecs*  TableGetSortSpecs();                        // get latest sort specs for the table (NULL if not sorting).  Lifetime: don't hold on this pointer over multiple frames or past any subsequent call to BeginTable().
-//    IMGUI_API int                   TableGetColumnCount();                      // return number of columns (value passed to BeginTable)
-//    IMGUI_API int                   TableGetColumnIndex();                      // return current column index.
-//    IMGUI_API int                   TableGetRowIndex();                         // return current row index (header rows are accounted for)
-//    IMGUI_API const char*           TableGetColumnName(int column_n = -1);      // return "" if column didn't have a name declared by TableSetupColumn(). Pass -1 to use current column.
-//    IMGUI_API ImGuiTableColumnFlags TableGetColumnFlags(int column_n = -1);     // return column flags so you can query their Enabled/Visible/Sorted/Hovered status flags. Pass -1 to use current column.
-//    IMGUI_API void                  TableSetColumnEnabled(int column_n, bool v);// change user accessible enabled/disabled state of a column. Set to false to hide the column. User can use the context menu to change this themselves (right-click in headers, or right-click in columns body with ImGuiTableFlags_ContextMenuInBody)
-//    IMGUI_API int                   TableGetHoveredColumn();                    // return hovered column. return -1 when table is not hovered. return columns_count if the unused space at the right of visible columns is hovered. Can also use (TableGetColumnFlags() & ImGuiTableColumnFlags_IsHovered) instead.
-//    IMGUI_API void                  TableSetBgColor(ImGuiTableBgTarget target, ImU32 color, int column_n = -1);  // change the color of a cell, row, or column. See ImGuiTableBgTarget_ flags for details.
+    /** Only call endMainMenuBar() if beginMainMenuBar() returned true. */
+    public static void endMainMenuBar() {
+        cimgui_h.igEndMainMenuBar();
+    }
 
-    // Legacy Columns API (prefer using Tables!)
-    // - You can also use SameLine(pos_x) to mimic simplified columns.
-//    IMGUI_API void          Columns(int count = 1, const char* id = NULL, bool borders = true);
-//    IMGUI_API void          NextColumn();                                                       // next column, defaults to current row or next row if the current row is finished
-//    IMGUI_API int           GetColumnIndex();                                                   // get current column index
-//    IMGUI_API float         GetColumnWidth(int column_index = -1);                              // get column width (in pixels). pass -1 to use current column
-//    IMGUI_API void          SetColumnWidth(int column_index, float width);                      // set column width (in pixels). pass -1 to use current column
-//    IMGUI_API float         GetColumnOffset(int column_index = -1);                             // get position of column line (in pixels, from the left side of the contents region). pass -1 to use current column, otherwise 0..GetColumnsCount() inclusive. column 0 is typically 0.0f
-//    IMGUI_API void          SetColumnOffset(int column_index, float offset_x);                  // set position of column line (in pixels, from the left side of the contents region). pass -1 to use current column
-//    IMGUI_API int           GetColumnsCount();
+    /**
+     * Create a sub-menu entry. Only call {@link #endMenu()} if this returns true.
+     */
+    public static boolean beginMenu(String label) {
+        return beginMenu(label, true);
+    }
 
-    // Tab Bars, Tabs
-    // - Note: Tabs are automatically created by the docking system (when in 'docking' branch). Use this to create tab bars/tabs yourself.
-//    IMGUI_API bool          BeginTabBar(const char* str_id, ImGuiTabBarFlags flags = 0);        // create and append into a TabBar
-//    IMGUI_API void          EndTabBar();                                                        // only call EndTabBar() if BeginTabBar() returns true!
-//    IMGUI_API bool          BeginTabItem(const char* label, bool* p_open = NULL, ImGuiTabItemFlags flags = 0); // create a Tab. Returns true if the Tab is selected.
-//    IMGUI_API void          EndTabItem();                                                       // only call EndTabItem() if BeginTabItem() returns true!
-//    IMGUI_API bool          TabItemButton(const char* label, ImGuiTabItemFlags flags = 0);      // create a Tab behaving like a button. return true when clicked. cannot be selected in the tab bar.
-//    IMGUI_API void          SetTabItemClosed(const char* tab_or_docked_window_label);           // notify TabBar or Docking system of a closed tab/window ahead (useful to reduce visual flicker on reorderable tab bars). For tab-bar: call after BeginTabBar() and before Tab submissions. Otherwise call with a window name.
+    /** Create a sub-menu entry, optionally disabled. */
+    public static boolean beginMenu(String label, boolean enabled) {
+        return cimgui_h.igBeginMenu(frameArena().allocateFrom(label), enabled);
+    }
 
-    // Logging/Capture
-    // - All text output from the interface can be captured into tty/file/clipboard. By default, tree nodes are automatically opened during logging.
-//    IMGUI_API void          LogToTTY(int auto_open_depth = -1);                                 // start logging to tty (stdout)
-//    IMGUI_API void          LogToFile(int auto_open_depth = -1, const char* filename = NULL);   // start logging to file
-//    IMGUI_API void          LogToClipboard(int auto_open_depth = -1);                           // start logging to OS clipboard
-//    IMGUI_API void          LogFinish();                                                        // stop logging (close file, etc.)
-//    IMGUI_API void          LogButtons();                                                       // helper to display buttons for logging to tty/file/clipboard
-//    IMGUI_API void          LogText(const char* fmt, ...) IM_FMTARGS(1);                        // pass text data straight to log (without being displayed)
-//    IMGUI_API void          LogTextV(const char* fmt, va_list args) IM_FMTLIST(1);
+    /** Only call endMenu() if beginMenu() returned true. */
+    public static void endMenu() {
+        cimgui_h.igEndMenu();
+    }
 
-    // Drag and Drop
-    // - On source items, call BeginDragDropSource(), if it returns true also call SetDragDropPayload() + EndDragDropSource().
-    // - On target candidates, call BeginDragDropTarget(), if it returns true also call AcceptDragDropPayload() + EndDragDropTarget().
-    // - If you stop calling BeginDragDropSource() the payload is preserved however it won't have a preview tooltip (we currently display a fallback "..." tooltip, see #1725)
-    // - An item can be both drag source and drop target.
-//    IMGUI_API bool          BeginDragDropSource(ImGuiDragDropFlags flags = 0);                                      // call after submitting an item which may be dragged. when this return true, you can call SetDragDropPayload() + EndDragDropSource()
-//    IMGUI_API bool          SetDragDropPayload(const char* type, const void* data, size_t sz, ImGuiCond cond = 0);  // type is a user defined string of maximum 32 characters. Strings starting with '_' are reserved for dear imgui internal types. Data is copied and held by imgui. Return true when payload has been accepted.
-//    IMGUI_API void          EndDragDropSource();                                                                    // only call EndDragDropSource() if BeginDragDropSource() returns true!
-//    IMGUI_API bool                  BeginDragDropTarget();                                                          // call after submitting an item that may receive a payload. If this returns true, you can call AcceptDragDropPayload() + EndDragDropTarget()
-//    IMGUI_API const ImGuiPayload*   AcceptDragDropPayload(const char* type, ImGuiDragDropFlags flags = 0);          // accept contents of a given type. If ImGuiDragDropFlags_AcceptBeforeDelivery is set you can peek into the payload before the mouse button is released.
-//    IMGUI_API void                  EndDragDropTarget();                                                            // only call EndDragDropTarget() if BeginDragDropTarget() returns true!
-//    IMGUI_API const ImGuiPayload*   GetDragDropPayload();                                                           // peek directly into the current payload from anywhere. returns NULL when drag and drop is finished or inactive. use ImGuiPayload::IsDataType() to test for the payload type.
+    /** Menu item. Returns true when activated. */
+    public static boolean menuItem(String label) {
+        return menuItem(label, null, false, true);
+    }
 
-    // Disabling [BETA API]
-    // - Disable all user interactions and dim items visuals (applying style.DisabledAlpha over current colors)
-    // - Those can be nested but it cannot be used to enable an already disabled section (a single BeginDisabled(true) in the stack is enough to keep everything disabled)
-    // - Tooltips windows are automatically opted out of disabling. Note that IsItemHovered() by default returns false on disabled items, unless using ImGuiHoveredFlags_AllowWhenDisabled.
-    // - BeginDisabled(false)/EndDisabled() essentially does nothing but is provided to facilitate use of boolean expressions (as a micro-optimization: if you have tens of thousands of BeginDisabled(false)/EndDisabled() pairs, you might want to reformulate your code to avoid making those calls)
-//    IMGUI_API void          BeginDisabled(bool disabled = true);
-//    IMGUI_API void          EndDisabled();
+    /** Menu item with keyboard shortcut hint. */
+    public static boolean menuItem(String label, String shortcut) {
+        return menuItem(label, shortcut, false, true);
+    }
 
-    // Clipping
-    // - Mouse hovering is affected by ImGui::PushClipRect() calls, unlike direct calls to ImDrawList::PushClipRect() which are render only.
-//    IMGUI_API void          PushClipRect(const ImVec2& clip_rect_min, const ImVec2& clip_rect_max, bool intersect_with_current_clip_rect);
-//    IMGUI_API void          PopClipRect();
+    /**
+     * Menu item — full control.
+     * @param selected visual checkmark (read-only)
+     * @param enabled  greyed out when false
+     */
+    public static boolean menuItem(String label, String shortcut, boolean selected, boolean enabled) {
+        var arena = frameArena();
+        var pShortcut = shortcut != null ? arena.allocateFrom(shortcut) : MemorySegment.NULL;
+        return cimgui_h.igMenuItem_Bool(arena.allocateFrom(label), pShortcut, selected, enabled);
+    }
 
-    // Focus, Activation
-//    IMGUI_API void          SetItemDefaultFocus();                                              // make last item the default focused item of a newly appearing window.
-//    IMGUI_API void          SetKeyboardFocusHere(int offset = 0);                               // focus keyboard on the next widget. Use positive 'offset' to access sub components of a multiple component widget. Use -1 to access previous widget.
+    /** Menu item with read-write selected state (auto-toggles on click). */
+    public static boolean menuItem(String label, String shortcut, BoolArg selected) {
+        return menuItem(label, shortcut, selected, true);
+    }
 
-    // Keyboard/Gamepad Navigation
-//    IMGUI_API void          SetNavCursorVisible(bool visible);                                  // alter visibility of keyboard/gamepad cursor. by default: show when using an arrow key, hide when clicking with mouse.
+    /** Menu item with read-write selected state — full control. */
+    public static boolean menuItem(String label, String shortcut, BoolArg selected, boolean enabled) {
+        var arena = frameArena();
+        var pShortcut = shortcut != null ? arena.allocateFrom(shortcut) : MemorySegment.NULL;
+        var pSelected = arena.allocate(cimgui_h.C_BOOL);
+        pSelected.set(cimgui_h.C_BOOL, 0, selected.get());
+        var result = cimgui_h.igMenuItem_BoolPtr(arena.allocateFrom(label), pShortcut, pSelected, enabled);
+        selected.set(pSelected.get(cimgui_h.C_BOOL, 0));
+        return result;
+    }
+    // endregion
 
-    // Overlapping mode
-//    IMGUI_API void          SetNextItemAllowOverlap();                                          // allow next item to be overlapped by a subsequent item. Useful with invisible buttons, selectable, treenode covering an area where subsequent items may need to be added. Note that both Selectable() and TreeNode() have dedicated flags doing this.
+    // =================================================================================================================
+    // region Tooltips
+    // - Tooltips are windows following the mouse. They do not take focus.
+    // - SetTooltip() is a shortcut for: if (BeginTooltip()) { Text(...); EndTooltip(); }
+    // =================================================================================================================
 
-    // Item/Widgets Utilities and Query Functions
-    // - Most of the functions are referring to the previous Item that has been submitted.
-    // - See Demo Window under "Widgets->Querying Status" for an interactive visualization of most of those functions.
-//    IMGUI_API bool          IsItemHovered(ImGuiHoveredFlags flags = 0);                         // is the last item hovered? (and usable, aka not blocked by a popup, etc.). See ImGuiHoveredFlags for more options.
-//    IMGUI_API bool          IsItemActive();                                                     // is the last item active? (e.g. button being held, text field being edited. This will continuously return true while holding mouse button on an item. Items that don't interact will always return false)
-//    IMGUI_API bool          IsItemFocused();                                                    // is the last item focused for keyboard/gamepad navigation?
-//    IMGUI_API bool          IsItemClicked(ImGuiMouseButton mouse_button = 0);                   // is the last item hovered and mouse clicked on? (**)  == IsMouseClicked(mouse_button) && IsItemHovered()Important. (**) this is NOT equivalent to the behavior of e.g. Button(). Read comments in function definition.
-//    IMGUI_API bool          IsItemVisible();                                                    // is the last item visible? (items may be out of sight because of clipping/scrolling)
-//    IMGUI_API bool          IsItemEdited();                                                     // did the last item modify its underlying value this frame? or was pressed? This is generally the same as the "bool" return value of many widgets.
-//    IMGUI_API bool          IsItemActivated();                                                  // was the last item just made active (item was previously inactive).
-//    IMGUI_API bool          IsItemDeactivated();                                                // was the last item just made inactive (item was previously active). Useful for Undo/Redo patterns with widgets that require continuous editing.
-//    IMGUI_API bool          IsItemDeactivatedAfterEdit();                                       // was the last item just made inactive and made a value change when it was active? (e.g. Slider/Drag moved). Useful for Undo/Redo patterns with widgets that require continuous editing. Note that you may get false positives (some widgets such as Combo()/ListBox()/Selectable() will return true even when clicking an already selected item).
-//    IMGUI_API bool          IsItemToggledOpen();                                                // was the last item open state toggled? set by TreeNode().
-//    IMGUI_API bool          IsAnyItemHovered();                                                 // is any item hovered?
-//    IMGUI_API bool          IsAnyItemActive();                                                  // is any item active?
-//    IMGUI_API bool          IsAnyItemFocused();                                                 // is any item focused?
-//    IMGUI_API ImGuiID       GetItemID();                                                        // get ID of last item (~~ often same ImGui::GetID(label) beforehand)
-//    IMGUI_API ImVec2        GetItemRectMin();                                                   // get upper-left bounding rectangle of the last item (screen space)
-//    IMGUI_API ImVec2        GetItemRectMax();                                                   // get lower-right bounding rectangle of the last item (screen space)
-//    IMGUI_API ImVec2        GetItemRectSize();                                                  // get size of last item
-//    IMGUI_API ImGuiItemFlags GetItemFlags();                                                    // get generic flags of last item
+    /**
+     * Begin a tooltip window. Only call {@link #endTooltip()} if this returns true.
+     */
+    public static boolean beginTooltip() {
+        return cimgui_h.igBeginTooltip();
+    }
 
-    // Viewports
-    // - Currently represents the Platform Window created by the application which is hosting our Dear ImGui windows.
-    // - In 'docking' branch with multi-viewport enabled, we extend this concept to have multiple active viewports.
-    // - In the future we will extend this concept further to also represent Platform Monitor and support a "no main platform window" operation mode.
-//    IMGUI_API ImGuiViewport* GetMainViewport();                                                 // return primary/default viewport. This can never be NULL.
+    /** Only call endTooltip() if beginTooltip() or beginItemTooltip() returned true. */
+    public static void endTooltip() {
+        cimgui_h.igEndTooltip();
+    }
 
-    // Background/Foreground Draw Lists
-//    IMGUI_API ImDrawList*   GetBackgroundDrawList();                                            // this draw list will be the first rendered one. Useful to quickly draw shapes/text behind dear imgui contents.
-//    IMGUI_API ImDrawList*   GetForegroundDrawList();                                            // this draw list will be the last rendered one. Useful to quickly draw shapes/text over dear imgui contents.
+    /**
+     * Set a text-only tooltip. Overrides any previous tooltip set this frame.
+     * Often used after {@link #isItemHovered()}.
+     */
+    public static void setTooltip(String text) {
+        SET_TOOLTIP.apply(frameArena().allocateFrom(text.replaceAll("%", "%%")));
+    }
 
-    // Miscellaneous Utilities
-//    IMGUI_API bool          IsRectVisible(const ImVec2& size);                                  // test if rectangle (of given size, starting from cursor position) is visible / not clipped.
-//    IMGUI_API bool          IsRectVisible(const ImVec2& rect_min, const ImVec2& rect_max);      // test if rectangle (in screen space) is visible / not clipped. to perform coarse clipping on user's side.
-//    IMGUI_API double        GetTime();                                                          // get global imgui time. incremented by io.DeltaTime every frame.
-//    IMGUI_API int           GetFrameCount();                                                    // get global imgui frame count. incremented by 1 every frame.
-//    IMGUI_API ImDrawListSharedData* GetDrawListSharedData();                                    // you may use this when creating your own ImDrawList instances.
-//    IMGUI_API const char*   GetStyleColorName(ImGuiCol idx);                                    // get a string corresponding to the enum value (for display, saving, etc.).
-//    IMGUI_API void          SetStateStorage(ImGuiStorage* storage);                             // replace current window storage with our own (if you want to manipulate it yourself, typically clear subsection of it)
-//    IMGUI_API ImGuiStorage* GetStateStorage();
+    /**
+     * Begin a tooltip window if the preceding item was hovered.
+     * Shortcut for the {@code IsItemHovered(ForTooltip) && BeginTooltip()} idiom.
+     */
+    public static boolean beginItemTooltip() {
+        return cimgui_h.igBeginItemTooltip();
+    }
 
-    // Text Utilities
-//    IMGUI_API ImVec2        CalcTextSize(const char* text, const char* text_end = NULL, bool hide_text_after_double_hash = false, float wrap_width = -1.0f);
+    /** Set a text-only tooltip if the preceding item was hovered. */
+    public static void setItemTooltip(String text) {
+        SET_ITEM_TOOLTIP.apply(frameArena().allocateFrom(text.replaceAll("%", "%%")));
+    }
+    // endregion
 
-    // Color Utilities
-//    IMGUI_API ImVec4        ColorConvertU32ToFloat4(ImU32 in);
-//    IMGUI_API ImU32         ColorConvertFloat4ToU32(const ImVec4& in);
-//    IMGUI_API void          ColorConvertRGBtoHSV(float r, float g, float b, float& out_h, float& out_s, float& out_v);
-//    IMGUI_API void          ColorConvertHSVtoRGB(float h, float s, float v, float& out_r, float& out_g, float& out_b);
+    // =================================================================================================================
+    // region Popups and Modals
+    // - Popups block normal mouse hovering detection behind them.
+    // - If not modal: closed by clicking outside or pressing ESCAPE.
+    // - Popup IDs are relative to the current ID stack.
+    // =================================================================================================================
 
-    // Inputs Utilities: Raw Keyboard/Mouse/Gamepad Access
-    // - Consider using the Shortcut() function instead of IsKeyPressed()/IsKeyChordPressed()! Shortcut() is easier to use and better featured (can do focus routing check).
-    // - the ImGuiKey enum contains all possible keyboard, mouse and gamepad inputs (e.g. ImGuiKey_A, ImGuiKey_MouseLeft, ImGuiKey_GamepadDpadUp...).
-    // - (legacy: before v1.87 (2022-02), we used ImGuiKey < 512 values to carry native/user indices as defined by each backends. This was obsoleted in 1.87 (2022-02) and completely removed in 1.91.5 (2024-11). See https://github.com/ocornut/imgui/issues/4921)
-//    IMGUI_API bool          IsKeyDown(ImGuiKey key);                                            // is key being held.
-//    IMGUI_API bool          IsKeyPressed(ImGuiKey key, bool repeat = true);                     // was key pressed (went from !Down to Down)? Repeat rate uses io.KeyRepeatDelay / KeyRepeatRate.
-//    IMGUI_API bool          IsKeyReleased(ImGuiKey key);                                        // was key released (went from Down to !Down)?
-//    IMGUI_API bool          IsKeyChordPressed(ImGuiKeyChord key_chord);                         // was key chord (mods + key) pressed, e.g. you can pass 'ImGuiMod_Ctrl | ImGuiKey_S' as a key-chord. This doesn't do any routing or focus check, please consider using Shortcut() function instead.
-//    IMGUI_API int           GetKeyPressedAmount(ImGuiKey key, float repeat_delay, float rate);  // uses provided repeat rate/delay. return a count, most often 0 or 1 but might be >1 if RepeatRate is small enough that DeltaTime > RepeatRate
-//    IMGUI_API const char*   GetKeyName(ImGuiKey key);                                           // [DEBUG] returns English name of the key. Those names are provided for debugging purpose and are not meant to be saved persistently nor compared.
-//    IMGUI_API void          SetNextFrameWantCaptureKeyboard(bool want_capture_keyboard);        // Override io.WantCaptureKeyboard flag next frame (said flag is left for your application to handle, typically when true it instructs your app to ignore inputs). e.g. force capture keyboard when your widget is being hovered. This is equivalent to setting "io.WantCaptureKeyboard = want_capture_keyboard"; after the next NewFrame() call.
+    /**
+     * Return true if the popup is open, and start appending into it.
+     * Call {@link #endPopup()} when done.
+     */
+    public static boolean beginPopup(String strId) {
+        return beginPopup(strId, 0);
+    }
 
-    // Inputs Utilities: Shortcut Testing & Routing
-    // - Typical use is e.g.: 'if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_S)) { ... }'.
-    // - Flags: Default route use ImGuiInputFlags_RouteFocused, but see ImGuiInputFlags_RouteGlobal and other options in ImGuiInputFlags_!
-    // - Flags: Use ImGuiInputFlags_Repeat to support repeat.
-    // - ImGuiKeyChord = a ImGuiKey + optional ImGuiMod_Alt/ImGuiMod_Ctrl/ImGuiMod_Shift/ImGuiMod_Super.
-    //       ImGuiKey_C                          // Accepted by functions taking ImGuiKey or ImGuiKeyChord arguments
-    //       ImGuiMod_Ctrl | ImGuiKey_C          // Accepted by functions taking ImGuiKeyChord arguments
-    //   only ImGuiMod_XXX values are legal to combine with an ImGuiKey. You CANNOT combine two ImGuiKey values.
-    // - The general idea is that several callers may register interest in a shortcut, and only one owner gets it.
-    //      Parent   -> call Shortcut(Ctrl+S)    // When Parent is focused, Parent gets the shortcut.
-    //        Child1 -> call Shortcut(Ctrl+S)    // When Child1 is focused, Child1 gets the shortcut (Child1 overrides Parent shortcuts)
-    //        Child2 -> no call                  // When Child2 is focused, Parent gets the shortcut.
-    //   The whole system is order independent, so if Child1 makes its calls before Parent, results will be identical.
-    //   This is an important property as it facilitate working with foreign code or larger codebase.
-    // - To understand the difference:
-    //   - IsKeyChordPressed() compares mods and call IsKeyPressed()
-    //     -> the function has no side-effect.
-    //   - Shortcut() submits a route, routes are resolved, if it currently can be routed it calls IsKeyChordPressed()
-    //     -> the function has (desirable) side-effects as it can prevents another call from getting the route.
-    // - Visualize registered routes in 'Metrics/Debugger->Inputs'.
-//    IMGUI_API bool          Shortcut(ImGuiKeyChord key_chord, ImGuiInputFlags flags = 0);
-//    IMGUI_API void          SetNextItemShortcut(ImGuiKeyChord key_chord, ImGuiInputFlags flags = 0);
+    /**
+     * Begin popup with window flags.
+     * @param flags {@code ImGuiWindowFlags}
+     */
+    public static boolean beginPopup(String strId, int flags) {
+        return cimgui_h.igBeginPopup(frameArena().allocateFrom(strId), flags);
+    }
 
-    // Inputs Utilities: Key/Input Ownership [BETA]
-    // - One common use case would be to allow your items to disable standard inputs behaviors such
-    //   as Tab or Alt key handling, Mouse Wheel scrolling, etc.
-    //   e.g. Button(...); SetItemKeyOwner(ImGuiKey_MouseWheelY); to make hovering/activating a button disable wheel for scrolling.
-    // - Reminder ImGuiKey enum include access to mouse buttons and gamepad, so key ownership can apply to them.
-    // - Many related features are still in imgui_internal.h. For instance, most IsKeyXXX()/IsMouseXXX() functions have an owner-id-aware version.
-//    IMGUI_API void          SetItemKeyOwner(ImGuiKey key);                                      // Set key owner to last item ID if it is hovered or active. Equivalent to 'if (IsItemHovered() || IsItemActive()) { SetKeyOwner(key, GetItemID());'.
+    /**
+     * Begin a modal popup. Blocks all interaction behind the window.
+     * Call {@link #endPopup()} when done.
+     */
+    public static boolean beginPopupModal(String name) {
+        return beginPopupModal(name, null, 0);
+    }
 
-    // Inputs Utilities: Mouse
-    // - To refer to a mouse button, you may use named enums in your code e.g. ImGuiMouseButton_Left, ImGuiMouseButton_Right.
-    // - You can also use regular integer: it is forever guaranteed that 0=Left, 1=Right, 2=Middle.
-    // - Dragging operations are only reported after mouse has moved a certain distance away from the initial clicking position (see 'lock_threshold' and 'io.MouseDraggingThreshold')
-//    IMGUI_API bool          IsMouseDown(ImGuiMouseButton button);                               // is mouse button held?
-//    IMGUI_API bool          IsMouseClicked(ImGuiMouseButton button, bool repeat = false);       // did mouse button clicked? (went from !Down to Down). Same as GetMouseClickedCount() == 1.
-//    IMGUI_API bool          IsMouseReleased(ImGuiMouseButton button);                           // did mouse button released? (went from Down to !Down)
-//    IMGUI_API bool          IsMouseDoubleClicked(ImGuiMouseButton button);                      // did mouse button double-clicked? Same as GetMouseClickedCount() == 2. (note that a double-click will also report IsMouseClicked() == true)
-//    IMGUI_API bool          IsMouseReleasedWithDelay(ImGuiMouseButton button, float delay);     // delayed mouse release (use very sparingly!). Generally used with 'delay >= io.MouseDoubleClickTime' + combined with a 'io.MouseClickedLastCount==1' test. This is a very rarely used UI idiom, but some apps use this: e.g. MS Explorer single click on an icon to rename.
-//    IMGUI_API int           GetMouseClickedCount(ImGuiMouseButton button);                      // return the number of successive mouse-clicks at the time where a click happen (otherwise 0).
-//    IMGUI_API bool          IsMouseHoveringRect(const ImVec2& r_min, const ImVec2& r_max, bool clip = true);// is mouse hovering given bounding rect (in screen space). clipped by current clipping settings, but disregarding of other consideration of focus/window ordering/popup-block.
-//    IMGUI_API bool          IsMousePosValid(const ImVec2* mouse_pos = NULL);                    // by convention we use (-FLT_MAX,-FLT_MAX) to denote that there is no mouse available
-//    IMGUI_API bool          IsAnyMouseDown();                                                   // [WILL OBSOLETE] is any mouse button held? This was designed for backends, but prefer having backend maintain a mask of held mouse buttons, because upcoming input queue system will make this invalid.
-//    IMGUI_API ImVec2        GetMousePos();                                                      // shortcut to ImGui::GetIO().MousePos provided by user, to be consistent with other calls
-//    IMGUI_API ImVec2        GetMousePosOnOpeningCurrentPopup();                                 // retrieve mouse position at the time of opening popup we have BeginPopup() into (helper to avoid user backing that value themselves)
-//    IMGUI_API bool          IsMouseDragging(ImGuiMouseButton button, float lock_threshold = -1.0f);         // is mouse dragging? (uses io.MouseDraggingThreshold if lock_threshold < 0.0f)
-//    IMGUI_API ImVec2        GetMouseDragDelta(ImGuiMouseButton button = 0, float lock_threshold = -1.0f);   // return the delta from the initial clicking position while the mouse button is pressed or was just released. This is locked and return 0.0f until the mouse moves past a distance threshold at least once (uses io.MouseDraggingThreshold if lock_threshold < 0.0f)
-//    IMGUI_API void          ResetMouseDragDelta(ImGuiMouseButton button = 0);                   //
-//    IMGUI_API ImGuiMouseCursor GetMouseCursor();                                                // get desired mouse cursor shape. Important: reset in ImGui::NewFrame(), this is updated during the frame. valid before Render(). If you use software rendering by setting io.MouseDrawCursor ImGui will render those for you
-//    IMGUI_API void          SetMouseCursor(ImGuiMouseCursor cursor_type);                       // set desired mouse cursor shape
-//    IMGUI_API void          SetNextFrameWantCaptureMouse(bool want_capture_mouse);              // Override io.WantCaptureMouse flag next frame (said flag is left for your application to handle, typical when true it instructs your app to ignore inputs). This is equivalent to setting "io.WantCaptureMouse = want_capture_mouse;" after the next NewFrame() call.
+    /** Begin a modal popup with optional close button and window flags. */
+    public static boolean beginPopupModal(String name, BoolArg open, int flags) {
+        var arena = frameArena();
+        var pOpen = MemorySegment.NULL;
+        if (open != null) {
+            pOpen = arena.allocate(cimgui_h.C_BOOL);
+            pOpen.set(cimgui_h.C_BOOL, 0, open.get());
+        }
+        var result = cimgui_h.igBeginPopupModal(arena.allocateFrom(name), pOpen, flags);
+        if (open != null) open.set(pOpen.get(cimgui_h.C_BOOL, 0));
+        return result;
+    }
 
-    // Clipboard Utilities
-    // - Also see the LogToClipboard() function to capture GUI into clipboard, or easily output text data to the clipboard.
-//    IMGUI_API const char*   GetClipboardText();
-//    IMGUI_API void          SetClipboardText(const char* text);
+    /** Only call endPopup() if beginPopup*()/beginPopupModal() returned true. */
+    public static void endPopup() {
+        cimgui_h.igEndPopup();
+    }
 
-    // Settings/.Ini Utilities
-    // - The disk functions are automatically called if io.IniFilename != NULL (default is "imgui.ini").
-    // - Set io.IniFilename to NULL to load/save manually. Read io.WantSaveIniSettings description about handling .ini saving manually.
-    // - Important: default value "imgui.ini" is relative to current working dir! Most apps will want to lock this to an absolute path (e.g. same path as executables).
-//    IMGUI_API void          LoadIniSettingsFromDisk(const char* ini_filename);                  // call after CreateContext() and before the first call to NewFrame(). NewFrame() automatically calls LoadIniSettingsFromDisk(io.IniFilename).
-//    IMGUI_API void          LoadIniSettingsFromMemory(const char* ini_data, size_t ini_size=0); // call after CreateContext() and before the first call to NewFrame() to provide .ini data from your own data source.
-//    IMGUI_API void          SaveIniSettingsToDisk(const char* ini_filename);                    // this is automatically called (if io.IniFilename is not empty) a few seconds after any modification that should be reflected in the .ini file (and also by DestroyContext).
-//    IMGUI_API const char*   SaveIniSettingsToMemory(size_t* out_ini_size = NULL);               // return a zero-terminated string with the .ini data which you can save by your own mean. call when io.WantSaveIniSettings is set, then save data by your own mean and clear io.WantSaveIniSettings.
+    /**
+     * Mark a popup as open. Call once — not every frame.
+     */
+    public static void openPopup(String strId) {
+        openPopup(strId, 0);
+    }
 
-    // Debug Utilities
-    // - Your main debugging friend is the ShowMetricsWindow() function.
-    // - Interactive tools are all accessible from the 'Dear ImGui Demo->Tools' menu.
-    // - Read https://github.com/ocornut/imgui/wiki/Debug-Tools for a description of all available debug tools.
-//    IMGUI_API void          DebugTextEncoding(const char* text);
-//    IMGUI_API void          DebugFlashStyleColor(ImGuiCol idx);
-//    IMGUI_API void          DebugStartItemPicker();
-//    IMGUI_API bool          DebugCheckVersionAndDataLayout(const char* version_str, size_t sz_io, size_t sz_style, size_t sz_vec2, size_t sz_vec4, size_t sz_drawvert, size_t sz_drawidx); // This is called by IMGUI_CHECKVERSION() macro.
-//#ifndef IMGUI_DISABLE_DEBUG_TOOLS
-//    IMGUI_API void          DebugLog(const char* fmt, ...)           IM_FMTARGS(1); // Call via IMGUI_DEBUG_LOG() for maximum stripping in caller code!
-//    IMGUI_API void          DebugLogV(const char* fmt, va_list args) IM_FMTLIST(1);
-//#endif
+    /**
+     * Open popup by string ID with flags.
+     * @param popupFlags {@code ImGuiPopupFlags}
+     */
+    public static void openPopup(String strId, int popupFlags) {
+        cimgui_h.igOpenPopup_Str(frameArena().allocateFrom(strId), popupFlags);
+    }
 
-    // Memory Allocators
-    // - Those functions are not reliant on the current context.
-    // - DLL users: heaps and globals are not shared across DLL boundaries! You will need to call SetCurrentContext() + SetAllocatorFunctions()
-    //   for each static/DLL boundary you are calling from. Read "Context and Memory Allocators" section of imgui.cpp for more details.
-//    IMGUI_API void          SetAllocatorFunctions(ImGuiMemAllocFunc alloc_func, ImGuiMemFreeFunc free_func, void* user_data = NULL);
-//    IMGUI_API void          GetAllocatorFunctions(ImGuiMemAllocFunc* p_alloc_func, ImGuiMemFreeFunc* p_free_func, void** p_user_data);
-//    IMGUI_API void*         MemAlloc(size_t size);
-//    IMGUI_API void          MemFree(void* ptr);
+    /** Open popup by integer ID. Useful from nested ID stacks. */
+    public static void openPopup(int id, int popupFlags) {
+        cimgui_h.igOpenPopup_ID(id, popupFlags);
+    }
+
+    /**
+     * Open a popup when the last item is clicked (right-click by default).
+     */
+    public static void openPopupOnItemClick() {
+        openPopupOnItemClick(null, 0);
+    }
+
+    /** Open popup on item click with optional ID override and flags. */
+    public static void openPopupOnItemClick(String strId, int popupFlags) {
+        var pId = strId != null ? frameArena().allocateFrom(strId) : MemorySegment.NULL;
+        cimgui_h.igOpenPopupOnItemClick(pId, popupFlags);
+    }
+
+    /** Manually close the popup currently being built into. */
+    public static void closeCurrentPopup() {
+        cimgui_h.igCloseCurrentPopup();
+    }
+
+    /** Open+begin context popup when the last item is right-clicked. */
+    public static boolean beginPopupContextItem() {
+        return beginPopupContextItem(null, 0);
+    }
+
+    /** Context popup on last item with optional ID override and flags. */
+    public static boolean beginPopupContextItem(String strId, int popupFlags) {
+        var pId = strId != null ? frameArena().allocateFrom(strId) : MemorySegment.NULL;
+        return cimgui_h.igBeginPopupContextItem(pId, popupFlags);
+    }
+
+    /** Open+begin context popup when the current window is right-clicked. */
+    public static boolean beginPopupContextWindow() {
+        return beginPopupContextWindow(null, 0);
+    }
+
+    /** Context popup on current window with optional ID override and flags. */
+    public static boolean beginPopupContextWindow(String strId, int popupFlags) {
+        var pId = strId != null ? frameArena().allocateFrom(strId) : MemorySegment.NULL;
+        return cimgui_h.igBeginPopupContextWindow(pId, popupFlags);
+    }
+
+    /** Open+begin context popup when clicking in void (no windows). */
+    public static boolean beginPopupContextVoid() {
+        return beginPopupContextVoid(null, 0);
+    }
+
+    /** Context popup in void with optional ID override and flags. */
+    public static boolean beginPopupContextVoid(String strId, int popupFlags) {
+        var pId = strId != null ? frameArena().allocateFrom(strId) : MemorySegment.NULL;
+        return cimgui_h.igBeginPopupContextVoid(pId, popupFlags);
+    }
+
+    /** Return true if the named popup is open at the current ID stack level. */
+    public static boolean isPopupOpen(String strId) {
+        return isPopupOpen(strId, 0);
+    }
+
+    /** isPopupOpen with flags (e.g. {@code ImGuiPopupFlags_AnyPopupId}). */
+    public static boolean isPopupOpen(String strId, int flags) {
+        return cimgui_h.igIsPopupOpen_Str(frameArena().allocateFrom(strId), flags);
+    }
+    // endregion
+
+    // =================================================================================================================
+    // region Tables
+    // - Full-featured replacement for the legacy Columns API.
+    // - Call BeginTable() -> [TableSetupColumn()] -> [TableHeadersRow()] -> TableNextRow()/TableNextColumn() -> EndTable()
+    // =================================================================================================================
+
+    /**
+     * Begin a table. Returns false when not visible — always call {@link #endTable()} regardless.
+     */
+    public static boolean beginTable(String strId, int columns) {
+        return beginTable(strId, columns, 0, 0f, 0f, 0f);
+    }
+
+    /**
+     * Begin a table with flags.
+     * @param flags {@code ImGuiTableFlags}
+     */
+    public static boolean beginTable(String strId, int columns, int flags) {
+        return beginTable(strId, columns, flags, 0f, 0f, 0f);
+    }
+
+    /** Begin a table — full control. */
+    public static boolean beginTable(String strId, int columns, int flags, float outerSizeX, float outerSizeY, float innerWidth) {
+        return cimgui_h.igBeginTable(frameArena().allocateFrom(strId), columns, flags, imVec2(outerSizeX, outerSizeY), innerWidth);
+    }
+
+    /** Only call endTable() if beginTable() returned true. */
+    public static void endTable() {
+        cimgui_h.igEndTable();
+    }
+
+    /** Append into the first cell of a new row. */
+    public static void tableNextRow() {
+        tableNextRow(0, 0f);
+    }
+
+    /**
+     * Append into the first cell of a new row.
+     * @param rowFlags {@code ImGuiTableRowFlags}
+     */
+    public static void tableNextRow(int rowFlags, float minRowHeight) {
+        cimgui_h.igTableNextRow(rowFlags, minRowHeight);
+    }
+
+    /** Append into the next column. Returns true when the column is visible. */
+    public static boolean tableNextColumn() {
+        return cimgui_h.igTableNextColumn();
+    }
+
+    /** Append into the specified column. Returns true when the column is visible. */
+    public static boolean tableSetColumnIndex(int columnN) {
+        return cimgui_h.igTableSetColumnIndex(columnN);
+    }
+
+    /** Declare a column with default options. */
+    public static void tableSetupColumn(String label) {
+        tableSetupColumn(label, 0, 0f, 0);
+    }
+
+    /** Declare a column with flags. */
+    public static void tableSetupColumn(String label, int flags) {
+        tableSetupColumn(label, flags, 0f, 0);
+    }
+
+    /**
+     * Declare a column with label, resize flags, default width/weight, and user ID.
+     * @param flags {@code ImGuiTableColumnFlags}
+     */
+    public static void tableSetupColumn(String label, int flags, float initWidthOrWeight, int userId) {
+        cimgui_h.igTableSetupColumn(frameArena().allocateFrom(label), flags, initWidthOrWeight, userId);
+    }
+
+    /** Lock columns/rows so they remain visible when scrolled. */
+    public static void tableSetupScrollFreeze(int cols, int rows) {
+        cimgui_h.igTableSetupScrollFreeze(cols, rows);
+    }
+
+    /** Submit one header cell manually. */
+    public static void tableHeader(String label) {
+        cimgui_h.igTableHeader(frameArena().allocateFrom(label));
+    }
+
+    /** Submit a header row based on TableSetupColumn() data, and open the context menu. */
+    public static void tableHeadersRow() {
+        cimgui_h.igTableHeadersRow();
+    }
+
+    /**
+     * Submit a row of angled headers for columns flagged with {@code ImGuiTableColumnFlags_AngledHeader}.
+     * Must be the first row.
+     */
+    public static void tableAngledHeadersRow() {
+        cimgui_h.igTableAngledHeadersRow();
+    }
+
+    /**
+     * Get latest sort specs for the table. Returns NULL when not sorting.
+     * Do not hold this pointer past the next {@link #beginTable} call.
+     */
+    public static MemorySegment tableGetSortSpecs() {
+        return cimgui_h.igTableGetSortSpecs();
+    }
+
+    /** Return number of columns (value passed to beginTable). */
+    public static int tableGetColumnCount() {
+        return cimgui_h.igTableGetColumnCount();
+    }
+
+    /** Return current column index. */
+    public static int tableGetColumnIndex() {
+        return cimgui_h.igTableGetColumnIndex();
+    }
+
+    /** Return current row index (header rows are counted). */
+    public static int tableGetRowIndex() {
+        return cimgui_h.igTableGetRowIndex();
+    }
+
+    /** Return current column name. */
+    public static String tableGetColumnName() {
+        return tableGetColumnName(-1);
+    }
+
+    /** Return column name. Pass -1 for current column. */
+    public static String tableGetColumnName(int columnN) {
+        var ptr = cimgui_h.igTableGetColumnName_Int(columnN);
+        return ptr.equals(MemorySegment.NULL) ? "" : ptr.getString(0);
+    }
+
+    /**
+     * Return column flags. Pass -1 for current column.
+     * @return {@code ImGuiTableColumnFlags}
+     */
+    public static int tableGetColumnFlags() {
+        return tableGetColumnFlags(-1);
+    }
+
+    /** Return flags for the specified column. */
+    public static int tableGetColumnFlags(int columnN) {
+        return cimgui_h.igTableGetColumnFlags(columnN);
+    }
+
+    /** Enable or disable user access to a column. Set false to hide it. */
+    public static void tableSetColumnEnabled(int columnN, boolean enabled) {
+        cimgui_h.igTableSetColumnEnabled(columnN, enabled);
+    }
+
+    /**
+     * Return hovered column index, -1 when not hovered, or columnsCount for the unused right space.
+     */
+    public static int tableGetHoveredColumn() {
+        return cimgui_h.igTableGetHoveredColumn();
+    }
+
+    /**
+     * Change the background color of a cell, row, or column.
+     * @param target {@code ImGuiTableBgTarget}
+     */
+    public static void tableSetBgColor(int target, int color) {
+        tableSetBgColor(target, color, -1);
+    }
+
+    /** tableSetBgColor targeting a specific column. */
+    public static void tableSetBgColor(int target, int color, int columnN) {
+        cimgui_h.igTableSetBgColor(target, color, columnN);
+    }
+    // endregion
+
+    // =================================================================================================================
+    // region Legacy Columns API (prefer Tables!)
+    // =================================================================================================================
+
+    /** Begin single-column layout (resets to default). */
+    public static void columns() {
+        columns(1, null, true);
+    }
+
+    /** Begin multi-column layout. */
+    public static void columns(int count) {
+        columns(count, null, true);
+    }
+
+    /** Begin multi-column layout with optional ID and border toggle. */
+    public static void columns(int count, String id, boolean borders) {
+        var pId = id != null ? frameArena().allocateFrom(id) : MemorySegment.NULL;
+        cimgui_h.igColumns(count, pId, borders);
+    }
+
+    /** Move to the next column. */
+    public static void nextColumn() {
+        cimgui_h.igNextColumn();
+    }
+
+    /** Return current column index. */
+    public static int getColumnIndex() {
+        return cimgui_h.igGetColumnIndex();
+    }
+
+    /** Get current column width in pixels. */
+    public static float getColumnWidth() {
+        return getColumnWidth(-1);
+    }
+
+    /** Get column width in pixels. Pass -1 for current column. */
+    public static float getColumnWidth(int columnIndex) {
+        return cimgui_h.igGetColumnWidth(columnIndex);
+    }
+
+    /** Set column width in pixels. Pass -1 for current column. */
+    public static void setColumnWidth(int columnIndex, float width) {
+        cimgui_h.igSetColumnWidth(columnIndex, width);
+    }
+
+    /** Get current column line position in pixels from the left side of the content region. */
+    public static float getColumnOffset() {
+        return getColumnOffset(-1);
+    }
+
+    /** Get column offset in pixels. Pass -1 for current column. */
+    public static float getColumnOffset(int columnIndex) {
+        return cimgui_h.igGetColumnOffset(columnIndex);
+    }
+
+    /** Set column offset in pixels. Pass -1 for current column. */
+    public static void setColumnOffset(int columnIndex, float offsetX) {
+        cimgui_h.igSetColumnOffset(columnIndex, offsetX);
+    }
+
+    /** Return the total number of columns. */
+    public static int getColumnsCount() {
+        return cimgui_h.igGetColumnsCount();
+    }
+    // endregion
+
+    // =================================================================================================================
+    // region Tab Bars and Tabs
+    // =================================================================================================================
+
+    /**
+     * Create and append into a tab bar. Only call {@link #endTabBar()} if this returns true.
+     */
+    public static boolean beginTabBar(String strId) {
+        return beginTabBar(strId, 0);
+    }
+
+    /**
+     * Begin a tab bar with flags.
+     * @param flags {@code ImGuiTabBarFlags}
+     */
+    public static boolean beginTabBar(String strId, int flags) {
+        return cimgui_h.igBeginTabBar(frameArena().allocateFrom(strId), flags);
+    }
+
+    /** Only call endTabBar() if beginTabBar() returned true. */
+    public static void endTabBar() {
+        cimgui_h.igEndTabBar();
+    }
+
+    /**
+     * Create a tab item. Returns true when selected.
+     * Only call {@link #endTabItem()} if this returns true.
+     */
+    public static boolean beginTabItem(String label) {
+        return beginTabItem(label, null, 0);
+    }
+
+    /**
+     * Create a closable tab item.
+     * @param open  in/out; set to false when the close button is clicked
+     * @param flags {@code ImGuiTabItemFlags}
+     */
+    public static boolean beginTabItem(String label, BoolArg open, int flags) {
+        var arena = frameArena();
+        var pOpen = MemorySegment.NULL;
+        if (open != null) {
+            pOpen = arena.allocate(cimgui_h.C_BOOL);
+            pOpen.set(cimgui_h.C_BOOL, 0, open.get());
+        }
+        var result = cimgui_h.igBeginTabItem(arena.allocateFrom(label), pOpen, flags);
+        if (open != null) open.set(pOpen.get(cimgui_h.C_BOOL, 0));
+        return result;
+    }
+
+    /** Only call endTabItem() if beginTabItem() returned true. */
+    public static void endTabItem() {
+        cimgui_h.igEndTabItem();
+    }
+
+    /**
+     * Tab that behaves like a button. Returns true when clicked. Cannot be selected.
+     */
+    public static boolean tabItemButton(String label) {
+        return tabItemButton(label, 0);
+    }
+
+    /**
+     * Tab item button with flags.
+     * @param flags {@code ImGuiTabItemFlags}
+     */
+    public static boolean tabItemButton(String label, int flags) {
+        return cimgui_h.igTabItemButton(frameArena().allocateFrom(label), flags);
+    }
+
+    /** Notify the tab bar of a closed tab to reduce visual flicker on reorderable tab bars. */
+    public static void setTabItemClosed(String tabOrDockedWindowLabel) {
+        cimgui_h.igSetTabItemClosed(frameArena().allocateFrom(tabOrDockedWindowLabel));
+    }
+    // endregion
+
+    // =================================================================================================================
+    // region Logging / Capture
+    // - All text output from the interface can be captured into tty/file/clipboard.
+    // =================================================================================================================
+
+    /** Start logging to stdout. @param autoOpenDepth tree nodes to auto-expand (-1 = default) */
+    public static void logToTTY() {
+        logToTTY(-1);
+    }
+
+    /** Start logging to stdout with explicit auto-open depth. */
+    public static void logToTTY(int autoOpenDepth) {
+        cimgui_h.igLogToTTY(autoOpenDepth);
+    }
+
+    /** Start logging to file (imgui_log.txt by default). */
+    public static void logToFile() {
+        logToFile(-1, null);
+    }
+
+    /** Start logging to a named file. Pass null for the default filename. */
+    public static void logToFile(int autoOpenDepth, String filename) {
+        var pFile = filename != null ? frameArena().allocateFrom(filename) : MemorySegment.NULL;
+        cimgui_h.igLogToFile(autoOpenDepth, pFile);
+    }
+
+    /** Start logging to the OS clipboard. */
+    public static void logToClipboard() {
+        logToClipboard(-1);
+    }
+
+    /** Start logging to clipboard with explicit auto-open depth. */
+    public static void logToClipboard(int autoOpenDepth) {
+        cimgui_h.igLogToClipboard(autoOpenDepth);
+    }
+
+    /** Stop logging (close file, etc.). */
+    public static void logFinish() {
+        cimgui_h.igLogFinish();
+    }
+
+    /** Display helper buttons for logging to tty/file/clipboard. */
+    public static void logButtons() {
+        cimgui_h.igLogButtons();
+    }
+
+    /** Pass text straight to the log without displaying it in the UI. */
+    public static void logText(String text) {
+        LOG_TEXT.apply(frameArena().allocateFrom(text.replaceAll("%", "%%")));
+    }
+    // endregion
+
+    // =================================================================================================================
+    // region Drag and Drop
+    // - Source: beginDragDropSource() -> setDragDropPayload() -> endDragDropSource()
+    // - Target: beginDragDropTarget() -> acceptDragDropPayload() -> endDragDropTarget()
+    // =================================================================================================================
+
+    /**
+     * Call after submitting an item that may be dragged. When true, call
+     * {@link #setDragDropPayload} and {@link #endDragDropSource()}.
+     */
+    public static boolean beginDragDropSource() {
+        return beginDragDropSource(0);
+    }
+
+    /**
+     * Begin drag drop source with flags.
+     * @param flags {@code ImGuiDragDropFlags}
+     */
+    public static boolean beginDragDropSource(int flags) {
+        return cimgui_h.igBeginDragDropSource(flags);
+    }
+
+    /**
+     * Set the payload data. {@code data} is copied by ImGui.
+     * @param type user-defined string, max 32 characters
+     */
+    public static boolean setDragDropPayload(String type, MemorySegment data, long size) {
+        return setDragDropPayload(type, data, size, 0);
+    }
+
+    /**
+     * Set drag-drop payload with condition.
+     * @param cond {@code ImGuiCond} (0 = always)
+     */
+    public static boolean setDragDropPayload(String type, MemorySegment data, long size, int cond) {
+        return cimgui_h.igSetDragDropPayload(frameArena().allocateFrom(type), data, size, cond);
+    }
+
+    /** Only call endDragDropSource() if beginDragDropSource() returned true. */
+    public static void endDragDropSource() {
+        cimgui_h.igEndDragDropSource();
+    }
+
+    /**
+     * Call after submitting an item that may receive a payload. When true, call
+     * {@link #acceptDragDropPayload} and {@link #endDragDropTarget()}.
+     */
+    public static boolean beginDragDropTarget() {
+        return cimgui_h.igBeginDragDropTarget();
+    }
+
+    /**
+     * Accept payload of the given type. Returns an ImGuiPayload* as MemorySegment, or NULL.
+     */
+    public static MemorySegment acceptDragDropPayload(String type) {
+        return acceptDragDropPayload(type, 0);
+    }
+
+    /**
+     * Accept drag-drop payload with flags.
+     * @param flags {@code ImGuiDragDropFlags}
+     */
+    public static MemorySegment acceptDragDropPayload(String type, int flags) {
+        return cimgui_h.igAcceptDragDropPayload(frameArena().allocateFrom(type), flags);
+    }
+
+    /** Only call endDragDropTarget() if beginDragDropTarget() returned true. */
+    public static void endDragDropTarget() {
+        cimgui_h.igEndDragDropTarget();
+    }
+
+    /** Peek at the current drag payload from anywhere. Returns NULL when drag-and-drop is inactive. */
+    public static MemorySegment getDragDropPayload() {
+        return cimgui_h.igGetDragDropPayload();
+    }
+    // endregion
+
+    // =================================================================================================================
+    // region Disabling
+    // - Disables all user interactions and dims items visually (applies style.DisabledAlpha).
+    // - A single BeginDisabled(true) in the stack keeps everything disabled; nesting is supported.
+    // =================================================================================================================
+
+    /** Begin a disabled section. All items inside will be non-interactive and dimmed. */
+    public static void beginDisabled() {
+        beginDisabled(true);
+    }
+
+    /** Begin a disabled section. Passing false is a no-op (useful for conditional expressions). */
+    public static void beginDisabled(boolean disabled) {
+        cimgui_h.igBeginDisabled(disabled);
+    }
+
+    /** End a disabled section started with {@link #beginDisabled()}. */
+    public static void endDisabled() {
+        cimgui_h.igEndDisabled();
+    }
+    // endregion
+
+    // =================================================================================================================
+    // region Clipping
+    // - Mouse hovering is affected by pushClipRect(), unlike direct ImDrawList calls which are render-only.
+    // =================================================================================================================
+
+    /**
+     * Push a clip rectangle affecting mouse hovering and rendering.
+     * @param intersectWithCurrentClipRect if true, intersects with the current clip rect
+     */
+    public static void pushClipRect(float clipRectMinX, float clipRectMinY, float clipRectMaxX, float clipRectMaxY, boolean intersectWithCurrentClipRect) {
+        cimgui_h.igPushClipRect(imVec2(clipRectMinX, clipRectMinY), imVec2(clipRectMaxX, clipRectMaxY), intersectWithCurrentClipRect);
+    }
+
+    /** Pop the last clip rectangle. */
+    public static void popClipRect() {
+        cimgui_h.igPopClipRect();
+    }
+    // endregion
+
+    // =================================================================================================================
+    // region Focus and Activation
+    // =================================================================================================================
+
+    /** Make the last item the default focused item of a newly appearing window. */
+    public static void setItemDefaultFocus() {
+        cimgui_h.igSetItemDefaultFocus();
+    }
+
+    /**
+     * Focus keyboard on the next widget. Use positive offset to access sub-components of a
+     * multi-component widget. Use -1 to access the previous widget.
+     */
+    public static void setKeyboardFocusHere() {
+        setKeyboardFocusHere(0);
+    }
+
+    /** Set keyboard focus with offset. */
+    public static void setKeyboardFocusHere(int offset) {
+        cimgui_h.igSetKeyboardFocusHere(offset);
+    }
+    // endregion
+
+    // =================================================================================================================
+    // region Keyboard/Gamepad Navigation
+    // =================================================================================================================
+
+    /**
+     * Alter the visibility of the keyboard/gamepad cursor.
+     * Default: shown when using an arrow key, hidden when clicking with the mouse.
+     */
+    public static void setNavCursorVisible(boolean visible) {
+        cimgui_h.igSetNavCursorVisible(visible);
+    }
+
+    /**
+     * Allow the next item to be overlapped by a subsequent item.
+     * Useful with invisible buttons, selectables, and tree nodes.
+     */
+    public static void setNextItemAllowOverlap() {
+        cimgui_h.igSetNextItemAllowOverlap();
+    }
+    // endregion
+
+    // =================================================================================================================
+    // region Item / Widget Utilities and Query Functions
+    // - Most functions refer to the previously submitted item.
+    // =================================================================================================================
+
+    /**
+     * Is the last item hovered and usable (not blocked by a popup)?
+     */
+    public static boolean isItemHovered() {
+        return isItemHovered(0);
+    }
+
+    /**
+     * Is the last item hovered, with flags.
+     * @param flags {@code ImGuiHoveredFlags}
+     */
+    public static boolean isItemHovered(int flags) {
+        return cimgui_h.igIsItemHovered(flags);
+    }
+
+    /** Is the last item active (e.g. button held, text field being edited)? */
+    public static boolean isItemActive() {
+        return cimgui_h.igIsItemActive();
+    }
+
+    /** Is the last item focused for keyboard/gamepad navigation? */
+    public static boolean isItemFocused() {
+        return cimgui_h.igIsItemFocused();
+    }
+
+    /**
+     * Is the last item hovered and the given mouse button was clicked?
+     */
+    public static boolean isItemClicked() {
+        return isItemClicked(0);
+    }
+
+    /**
+     * Is the last item clicked with the given mouse button?
+     * @param mouseButton {@code ImGuiMouseButton} (default 0 = left)
+     */
+    public static boolean isItemClicked(int mouseButton) {
+        return cimgui_h.igIsItemClicked(mouseButton);
+    }
+
+    /** Is the last item visible (not clipped or scrolled out)? */
+    public static boolean isItemVisible() {
+        return cimgui_h.igIsItemVisible();
+    }
+
+    /** Did the last item modify its value this frame, or was it pressed? */
+    public static boolean isItemEdited() {
+        return cimgui_h.igIsItemEdited();
+    }
+
+    /** Was the last item just made active (previously inactive)? */
+    public static boolean isItemActivated() {
+        return cimgui_h.igIsItemActivated();
+    }
+
+    /** Was the last item just made inactive (previously active)? */
+    public static boolean isItemDeactivated() {
+        return cimgui_h.igIsItemDeactivated();
+    }
+
+    /** Was the last item deactivated AND did it change value while active? */
+    public static boolean isItemDeactivatedAfterEdit() {
+        return cimgui_h.igIsItemDeactivatedAfterEdit();
+    }
+
+    /** Was the last item's open state toggled? Set by treeNode*(). */
+    public static boolean isItemToggledOpen() {
+        return cimgui_h.igIsItemToggledOpen();
+    }
+
+    /** Is any item hovered? */
+    public static boolean isAnyItemHovered() {
+        return cimgui_h.igIsAnyItemHovered();
+    }
+
+    /** Is any item active? */
+    public static boolean isAnyItemActive() {
+        return cimgui_h.igIsAnyItemActive();
+    }
+
+    /** Is any item focused? */
+    public static boolean isAnyItemFocused() {
+        return cimgui_h.igIsAnyItemFocused();
+    }
+
+    /** Get the ID of the last item. */
+    public static int getItemID() {
+        return cimgui_h.igGetItemID();
+    }
+
+    /** Get the upper-left bounding rectangle of the last item (screen space). */
+    public static Vec2f getItemRectMin() {
+        var result = cimgui_h.igGetItemRectMin(frameArena());
+        return new Vec2f(ImVec2_c.x(result), ImVec2_c.y(result));
+    }
+
+    /** Get the lower-right bounding rectangle of the last item (screen space). */
+    public static Vec2f getItemRectMax() {
+        var result = cimgui_h.igGetItemRectMax(frameArena());
+        return new Vec2f(ImVec2_c.x(result), ImVec2_c.y(result));
+    }
+
+    /** Get the size of the last item. */
+    public static Vec2f getItemRectSize() {
+        var result = cimgui_h.igGetItemRectSize(frameArena());
+        return new Vec2f(ImVec2_c.x(result), ImVec2_c.y(result));
+    }
+
+    /**
+     * Get generic flags of the last item.
+     * @return {@code ImGuiItemFlags}
+     */
+    public static int getItemFlags() {
+        return cimgui_h.igGetItemFlags();
+    }
+    // endregion
+
+    // =================================================================================================================
+    // region TODO: Viewports
+    // - GetMainViewport() returns an ImGuiViewport* — deferred until a viewport wrapper is implemented.
+    // =================================================================================================================
+    // endregion
+
+    // =================================================================================================================
+    // region TODO: Background / Foreground Draw Lists
+    // - Requires DrawList wrapper — deferred until that is implemented.
+    // =================================================================================================================
+    // endregion
+
+    // =================================================================================================================
+    // region Miscellaneous Utilities
+    // =================================================================================================================
+
+    /** Test if a rectangle of the given size (starting from cursor position) is visible / not clipped. */
+    public static boolean isRectVisible(float sizeX, float sizeY) {
+        return cimgui_h.igIsRectVisible_Nil(imVec2(sizeX, sizeY));
+    }
+
+    /** Test if a rectangle in screen space is visible / not clipped. */
+    public static boolean isRectVisible(float rectMinX, float rectMinY, float rectMaxX, float rectMaxY) {
+        return cimgui_h.igIsRectVisible_Vec2(imVec2(rectMinX, rectMinY), imVec2(rectMaxX, rectMaxY));
+    }
+
+    /** Get global ImGui time, incremented by {@code io.DeltaTime} every frame. */
+    public static double getTime() {
+        return cimgui_h.igGetTime();
+    }
+
+    /** Get the global ImGui frame count, incremented by 1 every frame. */
+    public static int getFrameCount() {
+        return cimgui_h.igGetFrameCount();
+    }
+
+    /** Get a string corresponding to an {@code ImGuiCol} enum value (for display/saving). */
+    public static String getStyleColorName(int imGuiColIdx) {
+        return cimgui_h.igGetStyleColorName(imGuiColIdx).getString(0);
+    }
+
+    /** Calculate the size of a text string. */
+    public static Vec2f calcTextSize(String text) {
+        return calcTextSize(text, false, -1f);
+    }
+
+    /**
+     * Calculate the size of a text string.
+     * @param hideTextAfterDoubleHash stop measuring at {@code ##} (the label trick)
+     * @param wrapWidth               wrapping width (-1 = no wrap)
+     */
+    public static Vec2f calcTextSize(String text, boolean hideTextAfterDoubleHash, float wrapWidth) {
+        var arena = frameArena();
+        var result = cimgui_h.igCalcTextSize(arena, arena.allocateFrom(text), MemorySegment.NULL, hideTextAfterDoubleHash, wrapWidth);
+        return new Vec2f(ImVec2_c.x(result), ImVec2_c.y(result));
+    }
+    // endregion
+
+    // =================================================================================================================
+    // region Color Utilities
+    // =================================================================================================================
+
+    /** Convert a packed 32-bit color to Vec4f (r, g, b, a) with components in [0, 1]. */
+    public static Vec4f colorConvertU32ToFloat4(int color) {
+        var result = cimgui_h.igColorConvertU32ToFloat4(frameArena(), color);
+        return new Vec4f(ImVec4_c.x(result), ImVec4_c.y(result), ImVec4_c.z(result), ImVec4_c.w(result));
+    }
+
+    /** Convert Vec4f (r, g, b, a) to a packed 32-bit color. */
+    public static int colorConvertFloat4ToU32(float r, float g, float b, float a) {
+        return cimgui_h.igColorConvertFloat4ToU32(imVec4(r, g, b, a));
+    }
+
+    /** Convert RGB to HSV. Output values are written into the provided {@link FloatArg} objects. */
+    public static void colorConvertRGBtoHSV(float r, float g, float b, FloatArg outH, FloatArg outS, FloatArg outV) {
+        var arena = frameArena();
+        var pH = arena.allocate(cimgui_h.C_FLOAT);
+        var pS = arena.allocate(cimgui_h.C_FLOAT);
+        var pV = arena.allocate(cimgui_h.C_FLOAT);
+        cimgui_h.igColorConvertRGBtoHSV(r, g, b, pH, pS, pV);
+        outH.set(pH.get(cimgui_h.C_FLOAT, 0));
+        outS.set(pS.get(cimgui_h.C_FLOAT, 0));
+        outV.set(pV.get(cimgui_h.C_FLOAT, 0));
+    }
+
+    /** Convert HSV to RGB. Output values are written into the provided {@link FloatArg} objects. */
+    public static void colorConvertHSVtoRGB(float h, float s, float v, FloatArg outR, FloatArg outG, FloatArg outB) {
+        var arena = frameArena();
+        var pR = arena.allocate(cimgui_h.C_FLOAT);
+        var pG = arena.allocate(cimgui_h.C_FLOAT);
+        var pB = arena.allocate(cimgui_h.C_FLOAT);
+        cimgui_h.igColorConvertHSVtoRGB(h, s, v, pR, pG, pB);
+        outR.set(pR.get(cimgui_h.C_FLOAT, 0));
+        outG.set(pG.get(cimgui_h.C_FLOAT, 0));
+        outB.set(pB.get(cimgui_h.C_FLOAT, 0));
+    }
+    // endregion
+
+    // =================================================================================================================
+    // region Inputs: Keyboard
+    // =================================================================================================================
+
+    /** Is the given key currently being held? */
+    public static boolean isKeyDown(int imGuiKey) {
+        return cimgui_h.igIsKeyDown_Nil(imGuiKey);
+    }
+
+    /** Was the given key pressed this frame? Repeats using {@code io.KeyRepeatDelay / KeyRepeatRate}. */
+    public static boolean isKeyPressed(int imGuiKey) {
+        return isKeyPressed(imGuiKey, true);
+    }
+
+    /** Was the given key pressed? Control whether repeat is enabled. */
+    public static boolean isKeyPressed(int imGuiKey, boolean repeat) {
+        return cimgui_h.igIsKeyPressed_Bool(imGuiKey, repeat);
+    }
+
+    /** Was the given key released this frame? */
+    public static boolean isKeyReleased(int imGuiKey) {
+        return cimgui_h.igIsKeyReleased_Nil(imGuiKey);
+    }
+
+    /**
+     * Was the given key chord (mods + key) pressed this frame?
+     * E.g. {@code ImGuiMod_Ctrl | ImGuiKey_S}
+     */
+    public static boolean isKeyChordPressed(int imGuiKeyChord) {
+        return cimgui_h.igIsKeyChordPressed_Nil(imGuiKeyChord);
+    }
+
+    /** Return how many times the key was pressed, factoring in repeat rate and delay. */
+    public static int getKeyPressedAmount(int imGuiKey, float repeatDelay, float rate) {
+        return cimgui_h.igGetKeyPressedAmount(imGuiKey, repeatDelay, rate);
+    }
+
+    /** Return the English name of the key (for debugging). */
+    public static String getKeyName(int imGuiKey) {
+        return cimgui_h.igGetKeyName(imGuiKey).getString(0);
+    }
+
+    /**
+     * Override {@code io.WantCaptureKeyboard} for the next frame.
+     * When true, instructs your app to ignore keyboard input.
+     */
+    public static void setNextFrameWantCaptureKeyboard(boolean wantCaptureKeyboard) {
+        cimgui_h.igSetNextFrameWantCaptureKeyboard(wantCaptureKeyboard);
+    }
+    // endregion
+
+    // =================================================================================================================
+    // region Inputs: Shortcuts and Routing
+    // =================================================================================================================
+
+    /**
+     * Test a key chord with focus routing. Prefer over {@link #isKeyChordPressed} for UI shortcuts.
+     */
+    public static boolean shortcut(int imGuiKeyChord) {
+        return shortcut(imGuiKeyChord, 0);
+    }
+
+    /**
+     * Shortcut test with flags.
+     * @param flags {@code ImGuiInputFlags}
+     */
+    public static boolean shortcut(int imGuiKeyChord, int flags) {
+        return cimgui_h.igShortcut_Nil(imGuiKeyChord, flags);
+    }
+
+    /** Assign a shortcut to the next item. */
+    public static void setNextItemShortcut(int imGuiKeyChord) {
+        setNextItemShortcut(imGuiKeyChord, 0);
+    }
+
+    /** Assign a shortcut to the next item with flags. */
+    public static void setNextItemShortcut(int imGuiKeyChord, int flags) {
+        cimgui_h.igSetNextItemShortcut(imGuiKeyChord, flags);
+    }
+
+    /**
+     * Set key owner to last item ID if it is hovered or active.
+     * Equivalent to: {@code if (isItemHovered() || isItemActive()) SetKeyOwner(key, GetItemID())}
+     */
+    public static void setItemKeyOwner(int imGuiKey) {
+        cimgui_h.igSetItemKeyOwner_Nil(imGuiKey);
+    }
+    // endregion
+
+    // =================================================================================================================
+    // region Inputs: Mouse
+    // =================================================================================================================
+
+    /** Is the given mouse button currently held? */
+    public static boolean isMouseDown(int imGuiMouseButton) {
+        return cimgui_h.igIsMouseDown_Nil(imGuiMouseButton);
+    }
+
+    /** Did the mouse button go from not-pressed to pressed this frame? */
+    public static boolean isMouseClicked(int imGuiMouseButton) {
+        return isMouseClicked(imGuiMouseButton, false);
+    }
+
+    /** isMouseClicked with repeat support. */
+    public static boolean isMouseClicked(int imGuiMouseButton, boolean repeat) {
+        return cimgui_h.igIsMouseClicked_Bool(imGuiMouseButton, repeat);
+    }
+
+    /** Did the mouse button go from pressed to not-pressed this frame? */
+    public static boolean isMouseReleased(int imGuiMouseButton) {
+        return cimgui_h.igIsMouseReleased_Nil(imGuiMouseButton);
+    }
+
+    /** Did the mouse button double-click this frame? */
+    public static boolean isMouseDoubleClicked(int imGuiMouseButton) {
+        return cimgui_h.igIsMouseDoubleClicked_Nil(imGuiMouseButton);
+    }
+
+    /** Delayed mouse release — use sparingly for advanced interactions. */
+    public static boolean isMouseReleasedWithDelay(int imGuiMouseButton, float delay) {
+        return cimgui_h.igIsMouseReleasedWithDelay(imGuiMouseButton, delay);
+    }
+
+    /** Return the number of successive mouse clicks at the time of the last click event. */
+    public static int getMouseClickedCount(int imGuiMouseButton) {
+        return cimgui_h.igGetMouseClickedCount(imGuiMouseButton);
+    }
+
+    /**
+     * Is the mouse hovering the given bounding rectangle (screen space)?
+     * Clipped by current clip rect; ignores focus/window ordering.
+     */
+    public static boolean isMouseHoveringRect(float rMinX, float rMinY, float rMaxX, float rMaxY) {
+        return isMouseHoveringRect(rMinX, rMinY, rMaxX, rMaxY, true);
+    }
+
+    /** isMouseHoveringRect with clip control. */
+    public static boolean isMouseHoveringRect(float rMinX, float rMinY, float rMaxX, float rMaxY, boolean clip) {
+        return cimgui_h.igIsMouseHoveringRect(imVec2(rMinX, rMinY), imVec2(rMaxX, rMaxY), clip);
+    }
+
+    /** Is the mouse position valid? (Convention: (-FLT_MAX, -FLT_MAX) means no mouse.) */
+    public static boolean isMousePosValid() {
+        return cimgui_h.igIsMousePosValid(MemorySegment.NULL);
+    }
+
+    /** Is any mouse button currently held? */
+    public static boolean isAnyMouseDown() {
+        return cimgui_h.igIsAnyMouseDown();
+    }
+
+    /** Get current mouse position (shortcut to {@code io.MousePos}). */
+    public static Vec2f getMousePos() {
+        var result = cimgui_h.igGetMousePos(frameArena());
+        return new Vec2f(ImVec2_c.x(result), ImVec2_c.y(result));
+    }
+
+    /** Get mouse position at the time the current popup was opened. */
+    public static Vec2f getMousePosOnOpeningCurrentPopup() {
+        var result = cimgui_h.igGetMousePosOnOpeningCurrentPopup(frameArena());
+        return new Vec2f(ImVec2_c.x(result), ImVec2_c.y(result));
+    }
+
+    /** Is the mouse dragging? Uses {@code io.MouseDraggingThreshold} if lock_threshold < 0. */
+    public static boolean isMouseDragging(int imGuiMouseButton) {
+        return isMouseDragging(imGuiMouseButton, -1f);
+    }
+
+    /** isMouseDragging with explicit lock threshold. */
+    public static boolean isMouseDragging(int imGuiMouseButton, float lockThreshold) {
+        return cimgui_h.igIsMouseDragging(imGuiMouseButton, lockThreshold);
+    }
+
+    /**
+     * Return the delta from the initial click position while the mouse button is held or was just released.
+     * Locked until the mouse moves past threshold.
+     */
+    public static Vec2f getMouseDragDelta() {
+        return getMouseDragDelta(0, -1f);
+    }
+
+    /** getMouseDragDelta for the given button. */
+    public static Vec2f getMouseDragDelta(int imGuiMouseButton) {
+        return getMouseDragDelta(imGuiMouseButton, -1f);
+    }
+
+    /** getMouseDragDelta with explicit lock threshold. */
+    public static Vec2f getMouseDragDelta(int imGuiMouseButton, float lockThreshold) {
+        var result = cimgui_h.igGetMouseDragDelta(frameArena(), imGuiMouseButton, lockThreshold);
+        return new Vec2f(ImVec2_c.x(result), ImVec2_c.y(result));
+    }
+
+    /** Reset the mouse drag delta for the left button. */
+    public static void resetMouseDragDelta() {
+        resetMouseDragDelta(0);
+    }
+
+    /** Reset the mouse drag delta for the given button. */
+    public static void resetMouseDragDelta(int imGuiMouseButton) {
+        cimgui_h.igResetMouseDragDelta(imGuiMouseButton);
+    }
+
+    /**
+     * Get the desired mouse cursor shape.
+     * @return {@code ImGuiMouseCursor}
+     */
+    public static int getMouseCursor() {
+        return cimgui_h.igGetMouseCursor();
+    }
+
+    /**
+     * Set the desired mouse cursor shape.
+     * @param cursorType {@code ImGuiMouseCursor}
+     */
+    public static void setMouseCursor(int cursorType) {
+        cimgui_h.igSetMouseCursor(cursorType);
+    }
+
+    /**
+     * Override {@code io.WantCaptureMouse} for the next frame.
+     * When true, instructs your app to ignore mouse input.
+     */
+    public static void setNextFrameWantCaptureMouse(boolean wantCaptureMouse) {
+        cimgui_h.igSetNextFrameWantCaptureMouse(wantCaptureMouse);
+    }
+    // endregion
+
+    // =================================================================================================================
+    // region Clipboard Utilities
+    // =================================================================================================================
+
+    /** Get clipboard text. */
+    public static String getClipboardText() {
+        var ptr = cimgui_h.igGetClipboardText();
+        return ptr.equals(MemorySegment.NULL) ? "" : ptr.getString(0);
+    }
+
+    /** Set clipboard text. */
+    public static void setClipboardText(String text) {
+        cimgui_h.igSetClipboardText(frameArena().allocateFrom(text));
+    }
+    // endregion
+
+    // =================================================================================================================
+    // region Settings / .ini Utilities
+    // =================================================================================================================
+
+    /**
+     * Load settings from disk. Call after {@code CreateContext()} and before the first {@code NewFrame()}.
+     */
+    public static void loadIniSettingsFromDisk(String iniFilename) {
+        cimgui_h.igLoadIniSettingsFromDisk(frameArena().allocateFrom(iniFilename));
+    }
+
+    /**
+     * Load settings from a string. Call after {@code CreateContext()} and before the first {@code NewFrame()}.
+     */
+    public static void loadIniSettingsFromMemory(String iniData) {
+        var arena = frameArena();
+        cimgui_h.igLoadIniSettingsFromMemory(arena.allocateFrom(iniData), iniData.length());
+    }
+
+    /** Save settings to disk. Called automatically if {@code io.IniFilename} is set. */
+    public static void saveIniSettingsToDisk(String iniFilename) {
+        cimgui_h.igSaveIniSettingsToDisk(frameArena().allocateFrom(iniFilename));
+    }
+
+    /**
+     * Return the current settings as a zero-terminated string.
+     * Call when {@code io.WantSaveIniSettings} is set, then save and clear the flag.
+     */
+    public static String saveIniSettingsToMemory() {
+        var ptr = cimgui_h.igSaveIniSettingsToMemory(MemorySegment.NULL);
+        return ptr.equals(MemorySegment.NULL) ? "" : ptr.getString(0);
+    }
+    // endregion
+
+    // =================================================================================================================
+    // region Debug Utilities
+    // =================================================================================================================
+
+    /** Debug: show encoding tooltip for the given text. */
+    public static void debugTextEncoding(String text) {
+        cimgui_h.igDebugTextEncoding(frameArena().allocateFrom(text));
+    }
+
+    /** Debug: flash/highlight the given style color. */
+    public static void debugFlashStyleColor(int imGuiColIdx) {
+        cimgui_h.igDebugFlashStyleColor(imGuiColIdx);
+    }
+
+    /** Debug: activate the item picker tool (click an item to break into the debugger). */
+    public static void debugStartItemPicker() {
+        cimgui_h.igDebugStartItemPicker();
+    }
+    // endregion
 
     // -----------------------------------------------------------------------------------------------------------------
     // region Utility methods
