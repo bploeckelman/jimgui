@@ -1,0 +1,98 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "net.bplo.libs",
+    "module": "jimgui-binding",
+    "version": "0.1.0-SNAPSHOT",
+    "attributes": {
+      "org.gradle.status": "integration"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "9.3.1"
+    }
+  },
+  "variants": [
+    {
+      "name": "apiElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.version": 25,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-api"
+      },
+      "dependencies": [
+        {
+          "group": "net.bplo.libs",
+          "module": "jimgui-native",
+          "version": {
+            "requires": "0.1.0-SNAPSHOT"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "jimgui-binding-0.1.0-SNAPSHOT.jar",
+          "url": "jimgui-binding-0.1.0-SNAPSHOT.jar",
+          "size": 2558633,
+          "sha512": "2c806a665a6ce38f058eaa80cb09f7ba824124efb0df72bcda350f018216641b2996aab793a9a8e4a40f6f3319c16df475696bcd048048915d145d859d0892a2",
+          "sha256": "446cd444cc9f0a528fb9b467fcccda8ee111d2d7148af74aec4b4164bd5733fc",
+          "sha1": "c04b4ce3ea364d6851439403d1d0b0df42c59928",
+          "md5": "ce671f35762b330e2d49c93cb1a4cd16"
+        }
+      ]
+    },
+    {
+      "name": "runtimeElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.version": 25,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime"
+      },
+      "dependencies": [
+        {
+          "group": "net.bplo.libs",
+          "module": "jimgui-native",
+          "version": {
+            "requires": "0.1.0-SNAPSHOT"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "jimgui-binding-0.1.0-SNAPSHOT.jar",
+          "url": "jimgui-binding-0.1.0-SNAPSHOT.jar",
+          "size": 2558633,
+          "sha512": "2c806a665a6ce38f058eaa80cb09f7ba824124efb0df72bcda350f018216641b2996aab793a9a8e4a40f6f3319c16df475696bcd048048915d145d859d0892a2",
+          "sha256": "446cd444cc9f0a528fb9b467fcccda8ee111d2d7148af74aec4b4164bd5733fc",
+          "sha1": "c04b4ce3ea364d6851439403d1d0b0df42c59928",
+          "md5": "ce671f35762b330e2d49c93cb1a4cd16"
+        }
+      ]
+    },
+    {
+      "name": "sourcesElements",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "java-runtime"
+      },
+      "files": [
+        {
+          "name": "jimgui-binding-0.1.0-SNAPSHOT-sources.jar",
+          "url": "jimgui-binding-0.1.0-SNAPSHOT-sources.jar",
+          "size": 603810,
+          "sha512": "03cb9551b378725840d3f779bfa1f18c43eb4d955a850c45902760fd8ecb58691a699f0a4fac096f9b74f517a35ef06191bcc89556c09865c0ede19a5f69375c",
+          "sha256": "43fa85ee8b68eb1209f80086e11877b413b6135687845bfad94f354b46504403",
+          "sha1": "140ddd0b79ca139b214682f124e489d03975c795",
+          "md5": "686f1870b76c735eb7faf579ed26805f"
+        }
+      ]
+    }
+  ]
+}
