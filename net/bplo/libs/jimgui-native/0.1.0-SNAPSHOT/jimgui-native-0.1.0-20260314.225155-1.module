@@ -1,0 +1,80 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "net.bplo.libs",
+    "module": "jimgui-native",
+    "version": "0.1.0-SNAPSHOT",
+    "attributes": {
+      "org.gradle.status": "integration"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "9.3.1"
+    }
+  },
+  "variants": [
+    {
+      "name": "apiElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.version": 25,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-api"
+      },
+      "files": [
+        {
+          "name": "jimgui-native-0.1.0-SNAPSHOT.jar",
+          "url": "jimgui-native-0.1.0-SNAPSHOT.jar",
+          "size": 594193,
+          "sha512": "27245f049781e3e4bbe3832cfed6fa4fddc191ad2bc17004692a725e2da445225fd3eb581ee3041ff50c2a9f270455f4c69f154ba75055b8ea07b0e2538e00a5",
+          "sha256": "7f4c3fcc2feaaa3588991eba4c2c83be143d69cdcc1b950c1256f50ff810cd58",
+          "sha1": "b9e4e9b0f4d0c8377284965922562af1dc7e3cc2",
+          "md5": "449a3d5c4b443ee61c9fc156302b4caa"
+        }
+      ]
+    },
+    {
+      "name": "runtimeElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.version": 25,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime"
+      },
+      "files": [
+        {
+          "name": "jimgui-native-0.1.0-SNAPSHOT.jar",
+          "url": "jimgui-native-0.1.0-SNAPSHOT.jar",
+          "size": 594193,
+          "sha512": "27245f049781e3e4bbe3832cfed6fa4fddc191ad2bc17004692a725e2da445225fd3eb581ee3041ff50c2a9f270455f4c69f154ba75055b8ea07b0e2538e00a5",
+          "sha256": "7f4c3fcc2feaaa3588991eba4c2c83be143d69cdcc1b950c1256f50ff810cd58",
+          "sha1": "b9e4e9b0f4d0c8377284965922562af1dc7e3cc2",
+          "md5": "449a3d5c4b443ee61c9fc156302b4caa"
+        }
+      ]
+    },
+    {
+      "name": "sourcesElements",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "java-runtime"
+      },
+      "files": [
+        {
+          "name": "jimgui-native-0.1.0-SNAPSHOT-sources.jar",
+          "url": "jimgui-native-0.1.0-SNAPSHOT-sources.jar",
+          "size": 592545,
+          "sha512": "770be62498c20fdb7066a8f17812d03fe61ea590beaf5aa669cf5a7621f009e1d2cda51559dde180c465481c911b969dedda7070974874f21a498b3f34c5df9a",
+          "sha256": "2f0facf6bd208bce4e1656a6a44e22502166d0dafadb90d15f882553044bea92",
+          "sha1": "308f4476c65d059ad4d726328a997eedc1d77f08",
+          "md5": "0a9973205e361d92abadd3470feec16b"
+        }
+      ]
+    }
+  ]
+}
