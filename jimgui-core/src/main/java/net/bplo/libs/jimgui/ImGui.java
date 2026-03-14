@@ -1,7 +1,6 @@
 package net.bplo.libs.jimgui;
 
 import net.bplo.libs.jimgui.binding.*;
-import org.w3c.dom.Text;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -34,6 +33,215 @@ public final class ImGui {
 
     public record Color3i(int r, int g, int b) {}
     public record Color4i(int r, int g, int b, int a) {}
+
+    public record Font(MemorySegment ptr) {
+        /**
+         * Pass to {@link #pushFont} to keep the current font and only change size -> {@code igPushFont(NULL, size)}
+         */
+        public static final Font KEEP_CURRENT = new Font(MemorySegment.NULL);
+
+        /**
+         * The size (unscaled pixels) passed to the {@code addFont*} call.
+         * Pass this to {@link #pushFont} to use this font at its natural size.
+         */
+        public float legacySize() {
+            return ImFont.LegacySize(ptr);
+        }
+
+        public boolean isKeepCurrent() {
+            return ptr.equals(MemorySegment.NULL);
+        }
+    }
+
+    public static final class FontAtlas {
+
+        private final MemorySegment ptr;
+
+        FontAtlas(MemorySegment ptr) {
+            this.ptr = ptr;
+        }
+
+        /** Adds the ImGui built-in default font (vector, scalable) to the atlas */
+        public Font addDefault() {
+            var cfg = newFontConfig();
+            var fontPtr = cimgui_h.ImFontAtlas_AddFontDefaultVector(ptr, cfg);
+            return new Font(fontPtr);
+        }
+
+        /**
+         * Adds a new (ttf/otf) font to the atlas from the specified file path with the specified default pixel size
+         * @param path The font file path to load. Also applied to the {@link ImFontConfig} struct associated with this font and size.
+         *             (shown in the built-in font selector ui)
+         * @param sizePixels The default font size in pixels.
+         */
+        public Font addFromFileTTF(String path, float sizePixels) {
+            var pathPtr = persistentArena().allocateFrom(path);
+            var fontCfg = newFontConfig();
+            var glyphRanges = MemorySegment.NULL;
+            var font = cimgui_h.ImFontAtlas_AddFontFromFileTTF(ptr, pathPtr, sizePixels, fontCfg, glyphRanges);
+            return new Font(font);
+        }
+
+        /**
+         * Adds a new (ttf/otf) font to the atlas from the specified file bytes with the specified default pixel size.
+         * @param name The font name to apply to the {@link ImFontConfig} struct associated with these bytes and size.
+         *             (shown in the built-in font selector ui)
+         * @param data The raw font bytes read from a ttf or otf file.
+         * @param sizePixels The default font size in pixels.
+         */
+        public Font addFromMemoryTTF(String name, byte[] data, float sizePixels) {
+            var fontCfg = newFontConfig();
+            writeFontConfigName(fontCfg, name);
+            // The font data bytes are owned by Java's persistent arena, not IM_ALLOC'd, so set the owned flag to false
+            // so that imgui will use the pointer but not try to IM_FREE it at shutdown.
+            ImFontConfig.FontDataOwnedByAtlas(fontCfg, false);
+
+            // Font data must live as long as the atlas. AddFontFromMemoryTTF stores the native pointer in Sources[i].FontData
+            // stb_truetype reads it lazily at first render - potentially many frames later. Need to use the persistent arena.
+            var fontData = persistentArena().allocate(data.length);
+            MemorySegment.copy(MemorySegment.ofArray(data), 0, fontData, 0, data.length);
+
+            var glyphRanges = MemorySegment.NULL;
+            var font = cimgui_h.ImFontAtlas_AddFontFromMemoryTTF(ptr, fontData, data.length, sizePixels, fontCfg, glyphRanges);
+            return new Font(font);
+        }
+
+        // -----------------------------------------------------------------------------------------
+        // Merging fonts
+        // Merging overlays a second font's glyphs onto the previously added font — the typical
+        // pattern for mixing a text font with an icon font (e.g. FontAwesome, Nerd Fonts).
+        // glyphRanges is a null-terminated ImWchar array in native memory; use getGlyphRanges*().
+        // -----------------------------------------------------------------------------------------
+
+        /**
+         * Merge glyphs from a file into the previously added font.
+         *
+         * @param glyphRanges null-terminated ImWchar range array; use e.g. {@link #getGlyphRangesDefault()}
+         *                    or a custom range allocated in the persistent arena
+         */
+        public void mergeFromFileTTF(String path, float sizePixels, MemorySegment glyphRanges) {
+            try (var arena = Arena.ofConfined()) {
+                var fontCfg = newFontConfig(arena);
+                ImFontConfig.MergeMode(fontCfg, true);
+
+                cimgui_h.ImFontAtlas_AddFontFromFileTTF(ptr, frameArena().allocateFrom(path), sizePixels, fontCfg, glyphRanges);
+            }
+        }
+
+        /**
+         * Merge glyphs from a byte array into the previously added font.
+         */
+        public void mergeFromMemoryTTF(byte[] data, float sizePixels, MemorySegment glyphRanges) {
+            var fontCfg = newFontConfig();
+            ImFontConfig.MergeMode(fontCfg, true);
+            ImFontConfig.FontDataOwnedByAtlas(fontCfg, false);
+
+            var fontData = persistentArena().allocate(data.length);
+            MemorySegment.copy(MemorySegment.ofArray(data), 0, fontData, 0, data.length);
+
+            cimgui_h.ImFontAtlas_AddFontFromMemoryTTF(ptr, fontData, data.length, sizePixels, fontCfg, glyphRanges);
+        }
+
+        // -----------------------------------------------------------------------------------------
+        // Glyph ranges
+        // These return native pointers stable for the life of the context; pass to merge*().
+        // -----------------------------------------------------------------------------------------
+
+        /** Basic Latin + Latin Supplement. Default when no range is specified. */
+        public MemorySegment getGlyphRangesDefault() {
+            return cimgui_h.ImFontAtlas_GetGlyphRangesDefault(ptr);
+        }
+
+        // -----------------------------------------------------------------------------------------
+        // Querying
+        // -----------------------------------------------------------------------------------------
+
+        /** Number of fonts currently registered in the atlas. */
+        public int getFontCount() {
+            var fontsVec = ImFontAtlas.Fonts(ptr);
+            return ImVector_ImFontPtr.Size(fontsVec);
+        }
+
+        /**
+         * Retrieve a previously added font by index.
+         * Index 0 is the first font added; if no fonts were added, index 0 is the built-in default.
+         */
+        public Font getFont(int index) {
+            var fontsVec = ImFontAtlas.Fonts(ptr);
+            int size = ImVector_ImFontPtr.Size(fontsVec);
+            if (index < 0 || index >= size) {
+                throw new IndexOutOfBoundsException("Font index " + index + " out of range [0, " + size + ")");
+            }
+
+            // Data is ImFont** — get the pointer-to-pointer, then dereference at index
+            var dataPtr = ImVector_ImFontPtr.Data(fontsVec);
+            return new Font(dataPtr.reinterpret(Long.MAX_VALUE).getAtIndex(cimgui_h.C_POINTER, index));
+        }
+
+        // -----------------------------------------------------------------------------------------
+        // Internal helpers
+        // -----------------------------------------------------------------------------------------
+
+        /** Creates and default-initializes a new {@link ImFontConfig} structure using the persistent arena. */
+        private static MemorySegment newFontConfig() {
+            return newFontConfig(persistentArena());
+        }
+
+        /** Creates and default-initializes a new {@link ImFontConfig} struct using the specified arena. */
+        private static MemorySegment newFontConfig(Arena arena) {
+            var cfg = ImFontConfig.allocate(arena);
+            // Note: we need to re-apply some default values in a newly created ImFontConfig struct:
+            // - ImFontConfig::ImFontConfig() sets these; Java zero-init misses them
+            // - RasterDensity = 0f trips IM_ASSERT in AddFont and sets font->CurrentRasterizerDensity = 0.
+            ImFontConfig.FontDataOwnedByAtlas(cfg, true); // start from c++ default; caller overrides if needed
+            ImFontConfig.RasterizerDensity(cfg, 1f);
+            ImFontConfig.RasterizerMultiply(cfg, 1f);
+            ImFontConfig.ExtraSizeScale(cfg, 1f);
+            ImFontConfig.GlyphMaxAdvanceX(cfg, Float.MAX_VALUE);
+            return cfg;
+        }
+
+        /**
+         * Write a display name into the {@code char[40] Name} field of an {@code ImFontConfig}.
+         * The name is truncated to 39 bytes (UTF-8) and always null-terminated.
+         * Primarily used for memory-loaded fonts that have no filename for ImGui to derive a name from.
+         */
+        private static void writeFontConfigName(MemorySegment cfg, String name) {
+            if (name == null || name.isEmpty()) return;
+            var bytes = name.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            int len = Math.min(bytes.length, 39); // Name field is char[40]; reserve one byte for '\0'
+            for (int i = 0; i < len; i++) {
+                ImFontConfig.Name(cfg, i, bytes[i]);
+            }
+            // Index 39 is already zero (arena.allocate zero-initialises), so null terminator is guaranteed.
+        }
+    }
+
+    public static final class TextureRef {
+
+        public static final TextureRef NULL = fromTexID(0L);
+
+        final MemorySegment ptr;
+
+        private TextureRef(MemorySegment ptr) {
+            this.ptr = ptr;
+        }
+
+        public static TextureRef fromTexID(long texID) {
+            var ptr = ImTextureRef_c.allocate(persistentArena());
+            ImTextureRef_c._TexData(ptr, MemorySegment.NULL);
+            ImTextureRef_c._TexID(ptr, texID);
+            return new TextureRef(ptr);
+        }
+
+        public void setTexID(long texID) {
+            ImTextureRef_c._TexID(ptr, texID);
+        }
+
+        public long getTexId() {
+            return ImTextureRef_c._TexID(ptr);
+        }
+    }
     //endregion
 
     // =================================================================================================================
@@ -691,7 +899,7 @@ public final class ImGui {
     //endregion
 
     // =================================================================================================================
-    // region TODO: Parameters stacks (font)
+    // region Parameters stacks (font)
     //  - PushFont(font, 0.0f)                       // Change font and keep current size
     //  - PushFont(NULL, 20.0f)                      // Keep font and change current size
     //  - PushFont(font, 20.0f)                      // Change font and set size to 20.0f
@@ -709,11 +917,45 @@ public final class ImGui {
     //  - INCORRECT: PushFont(NULL, GetFontSize() * 2.0f)       // INCORRECT! using size after global factors already applied == GLOBAL SCALING FACTORS WILL APPLY TWICE!
     // =================================================================================================================
 
-//    IMGUI_API void          PushFont(ImFont* font, float font_size_base_unscaled);          // Use NULL as a shortcut to keep current font. Use 0.0f to keep current size.
-//    IMGUI_API void          PopFont();
-//    IMGUI_API ImFont*       GetFont();                                                      // get current font
-//    IMGUI_API float         GetFontSize();                                                  // get current scaled font size (= height in pixels). AFTER global scale factors applied. *IMPORTANT* DO NOT PASS THIS VALUE TO PushFont()! Use ImGui::GetStyle().FontSizeBase to get value before global scale factors.
-//    IMGUI_API ImFontBaked*  GetFontBaked();                                                 // get current font bound at current size // == GetFont()->GetFontBaked(GetFontSize())
+    /**
+     * Use NULL as a shortcut to keep current font. Use 0.0f to keep current size.
+     */
+    public static void pushFont(Font font) {
+        pushFont(font, font.isKeepCurrent() ? 0f : font.legacySize());
+    }
+
+    /**
+     * Use NULL as a shortcut to keep current font. Use 0.0f to keep current size.
+     */
+    public static void pushFont(Font font, float fontSizeBaseUnscaled) {
+        cimgui_h.igPushFont(font.ptr(), fontSizeBaseUnscaled);
+    }
+
+    public static void popFont() {
+        cimgui_h.igPopFont();
+    }
+
+    /**
+     * Get current font
+     */
+    public static Font getFont() {
+        return new Font(cimgui_h.igGetFont());
+    }
+
+    /**
+     * Get current scaled font size (= height in pixels). AFTER global scale factors applied. *IMPORTANT* DO NOT PASS THIS VALUE TO PushFont()! Use ImGui::GetStyle().FontSizeBase to get value before global scale factors.
+     */
+    public static float getFontSize() {
+        return cimgui_h.igGetFontSize();
+    }
+
+    /**
+     * Get current font bound at current size // == GetFont()->GetFontBaked(GetFontSize())
+     * @return {@link ImFontBaked} native pointer
+     */
+    public static MemorySegment getFontBaked() {
+        return cimgui_h.igGetFontBaked();
+    }
     // endregion
 
     // =================================================================================================================
@@ -1414,7 +1656,7 @@ public final class ImGui {
     // endregion
 
     // =================================================================================================================
-    // region TODO: Widgets: Images
+    // region Widgets: Images
     // - Read about ImTextureID/ImTextureRef  here: https://github.com/ocornut/imgui/wiki/Image-Loading-and-Displaying-Examples
     // - 'uv0' and 'uv1' are texture coordinates. Read about them from the same link above.
     // - Image() pads adds style.ImageBorderSize on each side, ImageButton() adds style.FramePadding on each side.
@@ -1422,9 +1664,63 @@ public final class ImGui {
     // - An obsolete version of Image(), before 1.91.9 (March 2025), had a 'tint_col' parameter which is now supported by the ImageWithBg() function.
     // =================================================================================================================
 
-//    IMGUI_API void          Image(ImTextureRef tex_ref, const ImVec2& image_size, const ImVec2& uv0 = ImVec2(0, 0), const ImVec2& uv1 = ImVec2(1, 1));
-//    IMGUI_API void          ImageWithBg(ImTextureRef tex_ref, const ImVec2& image_size, const ImVec2& uv0 = ImVec2(0, 0), const ImVec2& uv1 = ImVec2(1, 1), const ImVec4& bg_col = ImVec4(0, 0, 0, 0), const ImVec4& tint_col = ImVec4(1, 1, 1, 1));
-//    IMGUI_API bool          ImageButton(const char* str_id, ImTextureRef tex_ref, const ImVec2& image_size, const ImVec2& uv0 = ImVec2(0, 0), const ImVec2& uv1 = ImVec2(1, 1), const ImVec4& bg_col = ImVec4(0, 0, 0, 0), const ImVec4& tint_col = ImVec4(1, 1, 1, 1));
+    /** Render a texture at the given display size. */
+    public static void image(TextureRef textureRef, float width, float height) {
+        image(textureRef, width, height, 0, 0, 1, 1);
+    }
+
+    /** Render a texture with explicit UV coordinates. */
+    public static void image(TextureRef textureRef, float width, float height, float u0, float v0, float u1, float v1) {
+        var size = imVec2(width, height);
+        var uv0 = imVec2(u0, v0);
+        var uv1 = imVec2(v1, u1);
+        cimgui_h.igImage(textureRef.ptr, size, uv0, uv1);
+    }
+
+    /** Render a texture with explicit background color. */
+    public static void imageWithBg(TextureRef textureRef, float width, float height, float bgR, float bgG, float bgB, float bgA) {
+        imageWithBg(textureRef, width, height, 0, 0, 1, 1, bgR, bgG, bgB, bgA, 1, 1, 1, 1);
+    }
+
+    /** Render a texture with explicit UVs, and background color. */
+    public static void imageWithBg(TextureRef textureRef, float width, float height, float u0, float v0, float u1, float v1, float bgR, float bgG, float bgB, float bgA) {
+        imageWithBg(textureRef, width, height, u0, v0, u1, v1, bgR, bgG, bgB, bgA, 1, 1, 1, 1);
+    }
+
+    /** Render a texture with explicit UVs, background, and tint colors. */
+    public static void imageWithBg(TextureRef textureRef, float width, float height, float u0, float v0, float u1, float v1, float bgR, float bgG, float bgB, float bgA, float tintR, float tintG, float tintB, float tintA) {
+        var size = imVec2(width, height);
+        var uv0 = imVec2(u0, v0);
+        var uv1 = imVec2(v1, u1);
+        var bg = imVec4(bgR, bgG, bgB, bgA);
+        var tint = imVec4(tintR, tintG, tintB, tintA);
+        cimgui_h.igImageWithBg(textureRef.ptr, size, uv0, uv1, bg, tint);
+    }
+
+    /** Image that behaves as a button. Returns true when clicked. */
+    public static boolean imageButton(String id, TextureRef textureRef, float width, float height) {
+        return imageButton(id, textureRef, width, height, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1);
+    }
+
+    /** Image that behaves as a button. Returns true when clicked. */
+    public static boolean imageButton(String id, TextureRef textureRef, float width, float height, float u0, float v0, float u1, float v1) {
+        return imageButton(id, textureRef, width, height, u0, v0, u1, v1, 0, 0, 0, 0, 1, 1, 1, 1);
+    }
+
+    /** Image that behaves as a button. Returns true when clicked. */
+    public static boolean imageButton(String id, TextureRef textureRef, float width, float height, float u0, float v0, float u1, float v1, float bgR, float bgG, float bgB, float bgA) {
+        return imageButton(id, textureRef, width, height, u0, v0, u1, v1, bgR, bgG, bgB, bgA, 1, 1, 1, 1);
+    }
+
+    /** Image that behaves as a button. Returns true when clicked. */
+    public static boolean imageButton(String id, TextureRef textureRef, float width, float height, float u0, float v0, float u1, float v1, float bgR, float bgG, float bgB, float bgA, float tintR, float tintG, float tintB, float tintA) {
+        var size = imVec2(width, height);
+        var uv0 = imVec2(u0, v0);
+        var uv1 = imVec2(v1, u1);
+        var bg = imVec4(bgR, bgG, bgB, bgA);
+        var tint = imVec4(tintR, tintG, tintB, tintA);
+        return cimgui_h.igImageButton(frameArena().allocateFrom(id), textureRef.ptr, size, uv0, uv1, bg, tint);
+    }
     // endregion
 
     // =================================================================================================================

@@ -80,6 +80,10 @@ public final class ImGuiManager {
         init("#version 150");
     }
 
+    public static ImGui.FontAtlas getFontAtlas() {
+        return new ImGui.FontAtlas(ImGuiIO.Fonts(cimgui_h.igGetIO_Nil()));
+    }
+
     /**
      * Begins a new ImGui frame. Call at the start of each render cycle,
      * before any {@code cimgui_h.ig*()} widget calls.
