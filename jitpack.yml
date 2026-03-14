@@ -1,0 +1,25 @@
+jdk:
+  - openjdk11  # only runs the install script; nothing is compiled here
+
+install:
+  - |
+    set -e
+
+    # JitPack sets $VERSION to the resolved version (e.g. 0.1.0 for tag v0.1.0).
+    # GitHub Release assets on public repos are freely accessible — no token needed.
+    BASE="https://github.com/bploeckelman/jimgui/releases/download/v${VERSION}"
+    M2="${HOME}/.m2/repository/net/bplo/libs"
+
+    echo "==> Installing jimgui ${VERSION} from GitHub Release v${VERSION}"
+
+    for MODULE in jimgui-native jimgui-binding jimgui-core; do
+      DEST="${M2}/${MODULE}/${VERSION}"
+      mkdir -p "${DEST}"
+      for EXT in .jar -sources.jar .pom; do
+        FILE="${MODULE}-${VERSION}${EXT}"
+        echo "    ${FILE}"
+        curl -fsSL "${BASE}/${FILE}" -o "${DEST}/${FILE}"
+      done
+    done
+
+    echo "==> Done"

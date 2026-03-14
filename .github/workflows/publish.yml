@@ -5,8 +5,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  publish:
-    runs-on: windows-latest   # for buildNatives (MSVC)
+  build:
+    runs-on: windows-latest   # buildNatives requires MSVC
     permissions:
       contents: read
       packages: write
@@ -16,7 +16,37 @@ jobs:
         with:
           java-version: 25
           distribution: temurin
+
       - run: ./gradlew buildNatives build publish
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_ACTOR: ${{ github.actor }}
+
+      # Pass the local maven-repo to the deploy job (rsync not available on Windows).
+      - uses: actions/upload-artifact@v4
+        with:
+          name: maven-repo
+          path: build/maven-repo/
+
+  deploy-pages:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: maven-repo
+          path: build/maven-repo/
+
+      - name: Add .nojekyll
+        run: touch build/maven-repo/.nojekyll
+
+      - uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          branch: gh-pages
+          folder: build/maven-repo
+          target-folder: .
+          clean: false

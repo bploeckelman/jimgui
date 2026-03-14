@@ -38,6 +38,15 @@ subprojects {
                         password = System.getenv('GITHUB_TOKEN') ?: findProperty('gpr.key')
                     }
                 }
+                // Static Maven repository deployed to GitHub Pages — no authentication required.
+                // Artifacts land in <root>/build/maven-repo/ and are pushed to the gh-pages
+                // branch by CI, then served at https://bploeckelman.github.io/jimgui/
+                maven {
+                    name = 'GitHubPages'
+                    // uri(File) produces a well-formed file:/// URI on all platforms,
+                    // including Windows where projectDir contains backslashes.
+                    url  = uri(rootProject.file("build/maven-repo"))
+                }
             }
         }
     }
