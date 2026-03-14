@@ -1673,7 +1673,7 @@ public final class ImGui {
     public static void image(TextureRef textureRef, float width, float height, float u0, float v0, float u1, float v1) {
         var size = imVec2(width, height);
         var uv0 = imVec2(u0, v0);
-        var uv1 = imVec2(v1, u1);
+        var uv1 = imVec2(u1, v1);
         cimgui_h.igImage(textureRef.ptr, size, uv0, uv1);
     }
 
@@ -1691,7 +1691,7 @@ public final class ImGui {
     public static void imageWithBg(TextureRef textureRef, float width, float height, float u0, float v0, float u1, float v1, float bgR, float bgG, float bgB, float bgA, float tintR, float tintG, float tintB, float tintA) {
         var size = imVec2(width, height);
         var uv0 = imVec2(u0, v0);
-        var uv1 = imVec2(v1, u1);
+        var uv1 = imVec2(u1, v1);
         var bg = imVec4(bgR, bgG, bgB, bgA);
         var tint = imVec4(tintR, tintG, tintB, tintA);
         cimgui_h.igImageWithBg(textureRef.ptr, size, uv0, uv1, bg, tint);
@@ -1716,7 +1716,7 @@ public final class ImGui {
     public static boolean imageButton(String id, TextureRef textureRef, float width, float height, float u0, float v0, float u1, float v1, float bgR, float bgG, float bgB, float bgA, float tintR, float tintG, float tintB, float tintA) {
         var size = imVec2(width, height);
         var uv0 = imVec2(u0, v0);
-        var uv1 = imVec2(v1, u1);
+        var uv1 = imVec2(u1, v1);
         var bg = imVec4(bgR, bgG, bgB, bgA);
         var tint = imVec4(tintR, tintG, tintB, tintA);
         return cimgui_h.igImageButton(frameArena().allocateFrom(id), textureRef.ptr, size, uv0, uv1, bg, tint);
